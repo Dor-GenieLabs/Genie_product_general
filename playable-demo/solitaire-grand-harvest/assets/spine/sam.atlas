@@ -1,0 +1,132 @@
+
+Sam_Daily_goodies_animation_remake.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+body_sam
+  rotate: false
+  xy: 2, 211
+  size: 244, 182
+  orig: 265, 231
+  offset: 1, 4
+  index: -1
+sam_eye_01
+  rotate: false
+  xy: 205, 370
+  size: 22, 22
+  orig: 22, 22
+  offset: 0, 0
+  index: -1
+sam_eye_02
+  rotate: false
+  xy: 229, 371
+  size: 21, 21
+  orig: 21, 21
+  offset: 0, 0
+  index: -1
+sam_eye_lip_01
+  rotate: false
+  xy: 2, 18
+  size: 57, 47
+  orig: 57, 48
+  offset: 0, 1
+  index: -1
+sam_eye_lip_02
+  rotate: false
+  xy: 461, 99
+  size: 50, 49
+  orig: 50, 52
+  offset: 0, 1
+  index: -1
+sam_eyes
+  rotate: false
+  xy: 81, 93
+  size: 108, 49
+  orig: 108, 49
+  offset: 0, 0
+  index: -1
+sam_jaw
+  rotate: 180
+  xy: 222, 59
+  size: 161, 91
+  orig: 161, 91
+  offset: 0, 0
+  index: -1
+sam_lefr_leg
+  rotate: false
+  xy: 421, 220
+  size: 74, 172
+  orig: 74, 172
+  offset: 0, 0
+  index: -1
+sam_left_arm
+  rotate: 270
+  xy: 68, 144
+  size: 92, 192
+  orig: 92, 192
+  offset: 0, 0
+  index: -1
+sam_left_ear
+  rotate: false
+  xy: 142, 35
+  size: 81, 76
+  orig: 81, 76
+  offset: 0, 0
+  index: -1
+sam_left_ear_front_part
+  rotate: false
+  xy: 297, 3
+  size: 84, 65
+  orig: 84, 66
+  offset: 0, 0
+  index: -1
+sam_right_arm
+  rotate: true
+  xy: 262, 126
+  size: 81, 197
+  orig: 81, 197
+  offset: 0, 0
+  index: -1
+sam_right_ear_front_part
+  rotate: false
+  xy: 65, 28
+  size: 85, 57
+  orig: 85, 57
+  offset: 0, 0
+  index: -1
+sam_right_leg
+  rotate: false
+  xy: 2, 65
+  size: 77, 154
+  orig: 77, 154
+  offset: 0, 0
+  index: -1
+sam_right_year
+  rotate: false
+  xy: 383, 45
+  size: 81, 97
+  orig: 81, 97
+  offset: 0, 0
+  index: -1
+sam_sam_toungh
+  rotate: true
+  xy: 220, 7
+  size: 63, 63
+  orig: 63, 63
+  offset: 0, 0
+  index: -1
+sam_tail
+  rotate: false
+  xy: 473, 158
+  size: 37, 60
+  orig: 42, 60
+  offset: 0, 0
+  index: -1
+sam_upper_part
+  rotate: true
+  xy: 246, 209
+  size: 183, 176
+  orig: 183, 176
+  offset: 0, 0
+  index: -1

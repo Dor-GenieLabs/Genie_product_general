@@ -66,30 +66,36 @@
     <div class="inner">
       <div class="title">SOLITAIRE<span>GRAND HARVEST</span></div>
       <img class="art" id="endArt" src="%%IMG_harvest_btn%%" alt="" />
-      <h1 id="endTitle">Peaks cleared!</h1>
-      <p id="endSub">Harvest your coins and grow your farm in the full game.</p>
+      <h1 id="endTitle">Sam is fed!</h1>
+      <p id="endSub">Harvest your coins and keep feeding Sam in the full game.</p>
       <button class="cta" id="ctaBtn">PLAY NOW</button>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+  <script>%%SPINE_PLUGIN%%</script>
   <script>
   (function () {
     var ASSETS = %%ASSETS_JSON%%;
     var SOUNDS = %%SOUNDS_JSON%%;
+    var SPINE_JSON = %%SPINE_JSON%%;
+    var SPINE_ATLAS = %%SPINE_ATLAS%%;
 
     var W = 720, H = 1280;
     var FONT = '"Arial Rounded MT Bold", "Arial Black", Arial, sans-serif';
     var RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
     var SUITS = ['h', 'd', 'c', 's'];
-    var CW = 74, CH = 115, CARD_SCALE = CW / 90, STEP = 77, ROW_STEP = 66;
-    var ROW_Y = [372, 438, 504];
-    var STOCK = { x: 175, y: 812 }, WASTE = { x: 415, y: 812 }, BIG = 1.28;
+    // Two peaks, big cards: 2 / 4 / 6
+    var CW = 100, CH = 155, CARD_SCALE = CW / 90, STEP = 104;
+    var ROW_Y = [318, 403, 488];
+    var STOCK = { x: 175, y: 712 }, WASTE = { x: 415, y: 712 }, BIG = 1.12;
     var COIN_TARGET = { x: 62, y: 66 };
-    var MAX_TAPS = 44, IDLE_END_MS = 45000;
+    var BOWL = { x: 612, y: 1178 }, SAM = { x: 440, y: 1000 };
+    var BOMB_SLOT = 7, BONES_NEEDED = 3;
+    var MAX_TAPS = 40, IDLE_END_MS = 45000;
     var DEAL_SEED = 20260917;
 
-    // ---------- audio (HTML5 audio, unlocked by the first tap) ----------
+    // ---------- audio ----------
     var muted = false, audioPool = {}, tapIdx = 0;
     function makeAudio() { for (var k in SOUNDS) { try { var a = new Audio(SOUNDS[k]); a.preload = 'auto'; audioPool[k] = a; } catch (e) {} } }
     function sfx(k, vol) {
@@ -99,12 +105,12 @@
     document.addEventListener('visibilitychange', function () { muted = document.hidden; });
     function fmt(n) { return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
 
-    // ---------- deal: seeded shuffle, verified by a greedy solver so the hint path clears the peaks ----------
+    // ---------- deal: seeded, verified by a greedy solver (the hint path) ----------
     function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
     function layoutSlots() {
       var slots = [], x2 = [];
-      for (var i = 0; i < 9; i++) x2.push(52 + i * STEP);
-      for (var k = 0; k < 3; k++) {
+      for (var i = 0; i < 6; i++) x2.push(100 + i * STEP);
+      for (var k = 0; k < 2; k++) {
         slots.push({ row: 0, x: x2[3 * k + 1], y: ROW_Y[0] });
         slots.push({ row: 1, x: x2[3 * k] + STEP / 2, y: ROW_Y[1] });
         slots.push({ row: 1, x: x2[3 * k + 1] + STEP / 2, y: ROW_Y[1] });
@@ -117,7 +123,7 @@
       var r = rng(seed), deck = [];
       for (var s = 0; s < 4; s++) for (var v = 0; v < 13; v++) deck.push({ v: v, s: s });
       for (var i = deck.length - 1; i > 0; i--) { var j = Math.floor(r() * (i + 1)); var t = deck[i]; deck[i] = deck[j]; deck[j] = t; }
-      return { board: deck.slice(0, 18), stock: deck.slice(18, 29) };
+      return { board: deck.slice(0, 12), stock: deck.slice(12, 21) };
     }
     function simulate(deal, slots) {
       var removed = slots.map(function () { return false; });
@@ -126,23 +132,23 @@
         for (var j = 0; j < slots.length; j++) if (!removed[j] && slots[j].row === slots[i].row + 1 && Math.abs(slots[j].x - slots[i].x) < CW - 2) return true;
         return false;
       };
-      var stock = deal.stock.slice(), top = stock.shift().v, plays = 0, draws = 0, left = 18;
+      var stock = deal.stock.slice(), top = stock.shift().v, order = [], moves = 0, draws = 0, left = 12, bombAt = -1;
       while (left > 0) {
         var pick = -1;
         for (var i = slots.length - 1; i >= 0; i--) if (!removed[i] && !covered(i) && adjacent(deal.board[i].v, top)) { pick = i; break; }
-        if (pick >= 0) { removed[pick] = true; top = deal.board[pick].v; plays++; left--; continue; }
-        if (!stock.length) return { win: false, plays: plays, draws: draws };
-        top = stock.shift().v; draws++;
+        if (pick >= 0) { removed[pick] = true; top = deal.board[pick].v; order.push(pick); moves++; left--; if (pick === BOMB_SLOT) bombAt = moves; continue; }
+        if (!stock.length) return { win: false };
+        top = stock.shift().v; draws++; moves++;
       }
-      return { win: true, plays: plays, draws: draws };
+      return { win: true, draws: draws, order: order, bombAt: bombAt, moves: moves };
     }
     function pickDeal() {
-      var slots = layoutSlots(), best = null;
-      for (var seed = DEAL_SEED; seed < DEAL_SEED + 4000; seed++) {
+      var slots = layoutSlots();
+      for (var seed = DEAL_SEED; seed < DEAL_SEED + 20000; seed++) {
         var d = makeDeal(seed), res = simulate(d, slots);
-        if (res.win && res.draws <= 7) { best = d; break; }
+        if (res.win && res.draws <= 4 && res.bombAt > 0 && res.bombAt <= 8) return { slots: slots, deal: d, res: res };
       }
-      return { slots: slots, deal: best || makeDeal(DEAL_SEED) };
+      var d2 = makeDeal(DEAL_SEED); return { slots: slots, deal: d2, res: simulate(d2, slots) };
     }
 
     // ---------- main scene ----------
@@ -152,15 +158,19 @@
 
       preload: function () {
         for (var k in IMAGES) if (!this.textures.exists(k)) this.textures.addImage(k, IMAGES[k]);
+        // Feed the Spine plugin from inline data instead of its URL loader.
+        this.textures.addImage('sam:Sam_Daily_goodies_animation_remake.png', IMAGES.sam_atlas);
+        this.cache.custom.spine.add('sam', { preMultipliedAlpha: false, data: SPINE_ATLAS, prefix: '' });
+        this.cache.json.add('sam', SPINE_JSON);
       },
 
       create: function () {
         var s = this;
         makeAudio();
-        s.coins = 0; s.streak = 0; s.taps = 0; s.state = 'deal'; s.ended = false; s.lastInput = s.time.now; s.startTime = s.time.now;
+        s.coins = 0; s.streak = 0; s.taps = 0; s.bones = 0; s.state = 'deal'; s.ended = false; s.lastInput = s.time.now;
         s.add.image(360, 640, 'table').setDisplaySize(W, H);
-        s.drawDecor(); s.drawHUD(); s.buildBoard();
-        s.hint = s.add.image(0, 0, 'arrow').setScale(0.8).setDepth(300).setVisible(false); s.hintTween = null;
+        s.drawDecor(); s.drawHUD(); s.buildBoard(); s.buildSam();
+        s.hint = s.add.image(0, 0, 'arrow').setScale(0.85).setDepth(300).setVisible(false); s.hintTween = null;
         s.input.on('pointerdown', function () { s.lastInput = s.time.now; s.hideHint(); });
         window.app = { gameStart: function () { s.scene.resume(); }, gameClose: function () { muted = true; s.scene.pause(); }, game: s.game };
         var pre = document.getElementById('preloader');
@@ -172,19 +182,17 @@
       update: function () {
         var s = this; if (s.ended) return;
         if (s.state === 'play') {
-          if (!s.hint.visible && s.time.now - s.lastInput > 2600) s.showHint();
-          if (s.time.now - s.lastInput > IDLE_END_MS) s.endGame(s.boardLeft() === 0);
+          if (!s.hint.visible && s.time.now - s.lastInput > 2400) s.showHint();
+          if (s.time.now - s.lastInput > IDLE_END_MS) s.endGame('idle');
         }
       },
 
-      // ---------- decor + HUD ----------
+      // ---------- decor, HUD ----------
       drawDecor: function () {
         var s = this;
-        s.sam = s.add.image(612, 1075, 'sam').setScale(0.62).setOrigin(0.5, 1);
-        s.tweens.add({ targets: s.sam, y: 1068, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-        s.add.image(90, 1120, 'carrot').setScale(0.9).setAngle(-8);
-        s.add.image(660, 1200, 'carrot').setScale(0.7).setAngle(12);
-        s.add.image(360, 1215, 'basket').setScale(0.7).setAlpha(0.95);
+        s.add.image(120, 1215, 'carrot').setScale(0.9).setAngle(-8);
+        s.add.image(660, 1225, 'carrot').setScale(0.7).setAngle(12);
+        s.add.image(150, 1120, 'basket').setScale(0.7).setAlpha(0.95);
       },
       pill: function (x, y, w, h) {
         var g = this.add.graphics();
@@ -196,17 +204,14 @@
         var s = this, st = { fontFamily: FONT, fontSize: '30px', color: '#fff6d2', stroke: '#1e3a12', strokeThickness: 5 };
         s.pill(26, 30, 290, 72); s.add.image(COIN_TARGET.x, COIN_TARGET.y, 'coin').setScale(0.5);
         s.coinText = s.add.text(100, 66, '0', st).setOrigin(0, 0.5);
-        // streak meter
         s.add.image(520, 66, 'streak_bar').setScale(0.95);
-        s.add.text(430, 66, 'STREAK', { fontFamily: FONT, fontSize: '20px', color: '#fff2c4', stroke: '#5a3410', strokeThickness: 4 }).setOrigin(0.5).setAngle(-90).setScale(0.9).setX(372);
+        s.add.text(372, 66, 'STREAK', { fontFamily: FONT, fontSize: '20px', color: '#fff2c4', stroke: '#5a3410', strokeThickness: 4 }).setOrigin(0.5).setAngle(-90).setScale(0.9);
         s.cells = [];
-        for (var i = 0; i < 6; i++) {
-          var c = s.add.image(414 + i * 34, 66, 'streak_cell').setScale(0.75).setTint(0x6b4a26);
-          s.cells.push(c);
-        }
+        for (var i = 0; i < 6; i++) s.cells.push(s.add.image(414 + i * 34, 66, 'streak_cell').setScale(0.75).setTint(0x6b4a26));
         s.multLabel = s.add.image(650, 66, 'streak_x2').setScale(0.85).setVisible(false);
-        s.multText = s.add.text(650, 66, '', { fontFamily: FONT, fontSize: '26px', color: '#ffe24a', stroke: '#5a3410', strokeThickness: 5 }).setOrigin(0.5);
-        s.add.text(360, 130, 'Tap a card one higher or lower than the pile', { fontFamily: FONT, fontSize: '24px', color: '#ffffff', stroke: '#1e3a12', strokeThickness: 5 }).setOrigin(0.5).setAlpha(0.95);
+        // goal banner
+        s.goalText = s.add.text(360, 138, 'FEED SAM 3 BONES BEFORE THE BOMB BLOWS!', { fontFamily: FONT, fontSize: '25px', color: '#ffe24a', stroke: '#3a2208', strokeThickness: 6 }).setOrigin(0.5);
+        s.tipText = s.add.text(360, 180, 'Tap a glowing card: 1 higher or lower than the pile', { fontFamily: FONT, fontSize: '22px', color: '#ffffff', stroke: '#1e3a12', strokeThickness: 5 }).setOrigin(0.5).setAlpha(0.95);
       },
       setCoins: function (target, dur) {
         var s = this, from = s.coins; s.coins = target;
@@ -215,13 +220,8 @@
       multiplier: function () { return Math.min(3, 1 + Math.floor(this.streak / 3)); },
       updateStreak: function () {
         var s = this, m = s.multiplier();
-        s.cells.forEach(function (c, i) {
-          var on = i < Math.min(s.streak, 6);
-          c.setTint(on ? 0xffffff : 0x6b4a26);
-          if (on && i === s.streak - 1) s.tweens.add({ targets: c, scale: 1.05, duration: 140, yoyo: true });
-        });
-        if (m > 1) { s.multLabel.setTexture(m === 2 ? 'streak_x2' : 'streak_x3').setVisible(true); s.multText.setText(''); }
-        else { s.multLabel.setVisible(false); }
+        s.cells.forEach(function (c, i) { var on = i < Math.min(s.streak, 6); c.setTint(on ? 0xffffff : 0x6b4a26); if (on && i === s.streak - 1) s.tweens.add({ targets: c, scale: 1.05, duration: 140, yoyo: true }); });
+        if (m > 1) s.multLabel.setTexture(m === 2 ? 'streak_x2' : 'streak_x3').setVisible(true); else s.multLabel.setVisible(false);
       },
       coinBurst: function (x, y, n, done) {
         var s = this, left = n;
@@ -236,31 +236,94 @@
       floatText: function (x, y, str, color, size) {
         var t = this.add.text(x, y, str, { fontFamily: FONT, fontSize: (size || 40) + 'px', color: color || '#ffe14a', stroke: '#3a2208', strokeThickness: 7 }).setOrigin(0.5).setDepth(260).setScale(0.4);
         this.tweens.add({ targets: t, scale: 1, duration: 220, ease: 'Back.easeOut' });
-        this.tweens.add({ targets: t, y: y - 80, alpha: 0, duration: 800, delay: 600, ease: 'Quad.easeIn', onComplete: function () { t.destroy(); } });
+        this.tweens.add({ targets: t, y: y - 80, alpha: 0, duration: 800, delay: 700, ease: 'Quad.easeIn', onComplete: function () { t.destroy(); } });
+      },
+
+      // ---------- Sam (Spine rig from the game) + bowl ----------
+      buildSam: function () {
+        var s = this;
+        s.rays = s.add.image(SAM.x, SAM.y + 110, 'rays').setScale(1.7).setAlpha(0).setDepth(20);
+        s.bowl = s.add.image(BOWL.x, BOWL.y, 'bowl').setScale(0.75).setDepth(24);
+        s.bowlBones = [];
+        for (var i = 0; i < BONES_NEEDED; i++) s.bowlBones.push(s.add.image(BOWL.x - 50 + i * 50, BOWL.y - 92, 'bone_off').setScale(0.5).setDepth(25));
+        s.bowlLabel = s.add.text(BOWL.x, BOWL.y - 140, 'BONES 0 / 3', { fontFamily: FONT, fontSize: '24px', color: '#fff6d2', stroke: '#1e3a12', strokeThickness: 5 }).setOrigin(0.5).setDepth(25);
+        s.add.image(BOWL.x, BOWL.y + 8, 'bowl_top').setScale(0.75).setDepth(27).setAlpha(0.9);
+        // Skeleton bounds are x -257..-102, y -225..27 in Spine space; y is flipped on screen.
+        s.sam = s.add.spine(SAM.x + 180, SAM.y + 5, 'sam', 'Idle', true);
+        s.sam.setDepth(26).setScale(0.95);
+        s.samTween = null;
+      },
+      samReact: function (big) {
+        var s = this;
+        if (!s.sam) return;
+        try { s.sam.play('In', false); s.sam.addAnimation(0, 'Idle', true, 0); } catch (e) {}
+        sfx(big ? 'bark' : 'bark2', 0.9);
+        if (s.samTween) s.samTween.stop();
+        s.samTween = s.tweens.add({ targets: s.sam, y: s.sam.y - (big ? 70 : 36), duration: 180, yoyo: true, ease: 'Quad.easeOut' });
+      },
+      collectBone: function (c) {
+        var s = this;
+        var b = s.add.image(c.x, c.y, 'bone').setScale(0.8).setDepth(280);
+        sfx('bone_fly', 0.9);
+        var idx = s.bones; s.bones++;
+        var target = s.bowlBones[idx];
+        s.tweens.add({ targets: b, x: target.x, y: target.y, scale: 0.55, duration: 520, ease: 'Cubic.easeIn', onComplete: function () {
+          b.destroy(); target.setTexture('bone_on'); sfx('bone_hit', 0.9);
+          s.tweens.add({ targets: target, scale: 0.7, duration: 160, yoyo: true });
+          s.bowlLabel.setText('BONES ' + s.bones + ' / 3');
+          if (s.bones >= BONES_NEEDED) s.samFed(); else s.samReact(false);
+        } });
+      },
+      samFed: function () {
+        var s = this;
+        s.samReact(true);
+        sfx('bone_prize', 1); sfx('bowl_reveal', 0.8);
+        s.rays.setAlpha(1); s.tweens.add({ targets: s.rays, angle: 360, duration: 6000, repeat: -1 });
+        s.tweens.add({ targets: s.rays, alpha: 0.35, duration: 700, yoyo: true, repeat: -1 });
+        s.floatText(360, SAM.y - 90, 'SAM IS FED! +500', '#ffe24a', 42);
+        s.coinBurst(BOWL.x, BOWL.y - 60, 14, null);
+        s.setCoins(s.coins + 500, 900);
+        s.goalText.setText('SAM IS FED! NOW CLEAR THE PEAKS');
+        s.bowlLabel.setText('FULL!');
       },
 
       // ---------- board ----------
       key: function (c) { return 'card_' + RANKS[c.v] + SUITS[c.s]; },
       buildBoard: function () {
         var s = this, picked = pickDeal();
-        s.slots = picked.slots; s.deal = picked.deal;
+        s.slots = picked.slots; s.deal = picked.deal; s.solution = picked.res;
+        // bones ride on the 2nd, 4th and 6th cards of the hint path, so following the hint feeds Sam
+        var order = s.solution.order || [], boneSlots = {};
+        [1, 3, 5].forEach(function (i) { if (order[i] != null) boneSlots[order[i]] = true; });
         s.cards = s.slots.map(function (sl, i) {
-          var img = s.add.image(STOCK.x, STOCK.y, 'card_back').setScale(CARD_SCALE * BIG).setDepth(10 + sl.row * 3).setVisible(false).setInteractive({ useHandCursor: true });
-          var c = { v: s.deal.board[i].v, s: s.deal.board[i].s, row: sl.row, x: sl.x, y: sl.y, img: img, removed: false, faceUp: false, i: i };
+          var glow = s.add.image(sl.x, sl.y, 'card_glow').setDisplaySize(CW + 56, CH + 56).setDepth(9).setVisible(false).setBlendMode(Phaser.BlendModes.ADD);
+          var glow2 = s.add.image(sl.x, sl.y, 'card_glow').setDisplaySize(CW + 34, CH + 34).setDepth(9).setVisible(false).setBlendMode(Phaser.BlendModes.ADD);
+          var img = s.add.image(STOCK.x, STOCK.y, 'card_back').setScale(CARD_SCALE * BIG).setDepth(10 + sl.row * 4).setVisible(false).setInteractive({ useHandCursor: true });
+          var c = { v: s.deal.board[i].v, s: s.deal.board[i].s, row: sl.row, x: sl.x, y: sl.y, img: img, glow: glow, glow2: glow2, removed: false, faceUp: false, i: i, bone: !!boneSlots[i], bomb: i === BOMB_SLOT };
+          if (c.bone) { c.boneIcon = s.add.image(sl.x + 30, sl.y - 52, 'bone').setScale(0.42).setDepth(11 + sl.row * 4).setVisible(false); }
           img.on('pointerdown', function () { s.onCard(c); });
           return c;
         });
-        // stock pile visuals
+        // bomb obstacle on one covered card: counts down with every move
+        var bc = s.cards[BOMB_SLOT];
+        s.bombCount = Math.max(6, (s.solution.bombAt || 5) + 3);
+        s.bombGlow = s.add.image(bc.x, bc.y - 30, 'bomb_glow').setScale(1.1).setAlpha(0.7).setDepth(11 + bc.row * 4).setVisible(false);
+        s.bombImg = s.add.image(bc.x, bc.y - 30, 'bomb').setScale(0.7).setDepth(12 + bc.row * 4).setVisible(false);
+        s.bombFuse = s.add.image(bc.x + 22, bc.y - 74, 'fuse').setScale(0.7).setDepth(12 + bc.row * 4).setVisible(false);
+        s.bombDigit = s.add.image(bc.x, bc.y - 28, 'digit' + Math.min(9, s.bombCount)).setScale(0.9).setDepth(13 + bc.row * 4).setVisible(false);
+        s.bombSkull = s.add.image(bc.x, bc.y + 30, 'skull').setScale(0.6).setDepth(13 + bc.row * 4).setVisible(false);
+        s.bombParts = [s.bombGlow, s.bombImg, s.bombFuse, s.bombDigit];
+        s.tweens.add({ targets: s.bombGlow, alpha: 0.25, duration: 600, yoyo: true, repeat: -1 });
+        // stock + waste
         s.stockCards = s.deal.stock.slice(); s.stockImgs = [];
         for (var i = 0; i < s.stockCards.length; i++) s.stockImgs.push(s.add.image(STOCK.x - i * 1.6, STOCK.y - i * 1.2, 'card_back').setScale(CARD_SCALE * BIG).setDepth(5 + i).setVisible(false));
-        s.stockZone = s.add.zone(STOCK.x, STOCK.y, 150, 200).setInteractive({ useHandCursor: true }).setDepth(40);
+        s.stockZone = s.add.zone(STOCK.x, STOCK.y, 160, 210).setInteractive({ useHandCursor: true }).setDepth(40);
         s.stockZone.on('pointerdown', function () { s.onStock(); });
-        s.stockCount = s.add.text(STOCK.x, STOCK.y + 105, '', { fontFamily: FONT, fontSize: '24px', color: '#fff6d2', stroke: '#1e3a12', strokeThickness: 5 }).setOrigin(0.5).setDepth(41);
-        // waste
-        s.wasteSlot = s.add.graphics(); s.wasteSlot.lineStyle(4, 0xffffff, 0.25); s.wasteSlot.strokeRoundedRect(WASTE.x - 47, WASTE.y - 74, 94, 148, 12);
+        s.stockCount = s.add.text(STOCK.x, STOCK.y + 112, '', { fontFamily: FONT, fontSize: '24px', color: '#fff6d2', stroke: '#1e3a12', strokeThickness: 5 }).setOrigin(0.5).setDepth(41);
+        var g = s.add.graphics(); g.lineStyle(4, 0xffffff, 0.25); g.strokeRoundedRect(WASTE.x - 53, WASTE.y - 82, 106, 164, 12);
         s.wasteImgs = []; s.top = null;
-        s.add.text(WASTE.x + 120, WASTE.y - 20, 'PILE', { fontFamily: FONT, fontSize: '22px', color: '#fff6d2', stroke: '#1e3a12', strokeThickness: 5 }).setOrigin(0.5).setAlpha(0.7);
-        s.add.text(STOCK.x, STOCK.y - 105, 'DRAW', { fontFamily: FONT, fontSize: '22px', color: '#fff6d2', stroke: '#1e3a12', strokeThickness: 5 }).setOrigin(0.5).setAlpha(0.7);
+        s.add.text(WASTE.x + 125, WASTE.y - 20, 'PILE', { fontFamily: FONT, fontSize: '22px', color: '#fff6d2', stroke: '#1e3a12', strokeThickness: 5 }).setOrigin(0.5).setAlpha(0.7);
+        s.add.text(STOCK.x, STOCK.y - 112, 'DRAW', { fontFamily: FONT, fontSize: '22px', color: '#fff6d2', stroke: '#1e3a12', strokeThickness: 5 }).setOrigin(0.5).setAlpha(0.7);
       },
       covered: function (c) {
         if (c.row === 2) return false;
@@ -273,25 +336,31 @@
         for (var i = s.cards.length - 1; i >= 0; i--) { var c = s.cards[i]; if (!c.removed && c.faceUp && !s.covered(c) && s.top && adjacent(c.v, s.top.v)) out.push(c); }
         return out;
       },
+      refreshGlow: function () {
+        var s = this, p = s.playable();
+        s.cards.forEach(function (c) { var on = s.state === 'play' && p.indexOf(c) >= 0; if (on && !c.glow.visible) { c.glow.setVisible(true).setAlpha(0.8); c.glow2.setVisible(true).setAlpha(0.9); s.tweens.add({ targets: [c.glow, c.glow2], alpha: 1, scaleX: '*=1.06', scaleY: '*=1.04', duration: 450, yoyo: true, repeat: -1 }); s.tweens.add({ targets: c.img, scale: CARD_SCALE * 1.04, duration: 450, yoyo: true, repeat: -1 }); } else if (!on && c.glow.visible) { s.tweens.killTweensOf([c.glow, c.glow2]); c.glow.setVisible(false); c.glow2.setVisible(false); if (!c.removed) { s.tweens.killTweensOf(c.img); c.img.setScale(CARD_SCALE); } } });
+      },
       dealCards: function () {
         var s = this, delay = 0;
         s.stockImgs.forEach(function (im) { im.setVisible(true); });
         s.stockCount.setText(String(s.stockCards.length));
         s.cards.forEach(function (c, i) {
-          c.img.setVisible(true).setDepth(10 + c.row * 3);
+          c.img.setVisible(true).setDepth(10 + c.row * 4);
           s.tweens.add({ targets: c.img, x: c.x, y: c.y, scale: CARD_SCALE, duration: 260, delay: delay, ease: 'Quad.easeOut' });
           if (i % 3 === 0) s.time.delayedCall(delay, function () { sfx('deal', 0.5); });
-          delay += 45;
+          delay += 55;
         });
-        s.time.delayedCall(delay + 200, function () {
-          s.cards.forEach(function (c, i) { if (c.row === 2) s.time.delayedCall(i * 18, function () { s.flip(c); }); });
-          s.time.delayedCall(700, function () { s.drawFromStock(true); });
+        s.time.delayedCall(delay + 150, function () {
+          s.bombParts.forEach(function (p) { p.setVisible(true); });
+          s.cards.forEach(function (c, i) { if (c.bone) c.boneIcon.setVisible(true); if (c.row === 2) s.time.delayedCall(i * 25, function () { s.flip(c); }); });
+          sfx('sam_in', 0.6);
+          s.time.delayedCall(650, function () { s.drawFromStock(true); });
         });
       },
       flip: function (c) {
         var s = this; c.faceUp = true;
         s.tweens.add({ targets: c.img, scaleX: 0.02, duration: 110, ease: 'Quad.easeIn', onComplete: function () {
-          c.img.setTexture(s.key(c)); s.tweens.add({ targets: c.img, scaleX: CARD_SCALE, duration: 130, ease: 'Quad.easeOut' });
+          c.img.setTexture(s.key(c)); s.tweens.add({ targets: c.img, scaleX: CARD_SCALE, duration: 130, ease: 'Quad.easeOut', onComplete: function () { s.refreshGlow(); } });
         } });
       },
       revealUncovered: function () {
@@ -307,18 +376,17 @@
         s.top = card; s.streak = 0; if (!initial) s.updateStreak();
         im.setDepth(60 + s.wasteImgs.length);
         s.tweens.add({ targets: im, x: WASTE.x, y: WASTE.y, duration: 220, ease: 'Quad.easeOut' });
-        s.tweens.add({ targets: im, scaleX: 0.02, duration: 110, delay: 60, onComplete: function () { im.setTexture(s.key(card)); s.tweens.add({ targets: im, scaleX: CARD_SCALE * BIG, duration: 120 }); } });
+        s.tweens.add({ targets: im, scaleX: 0.02, duration: 110, delay: 60, onComplete: function () { im.setTexture(s.key(card)); s.tweens.add({ targets: im, scaleX: CARD_SCALE * BIG, duration: 120, onComplete: function () { s.refreshGlow(); } }); } });
         sfx('flip', 0.8);
         s.wasteImgs.push(im);
-        if (initial) s.time.delayedCall(500, function () { s.state = 'play'; s.lastInput = s.time.now; s.time.delayedCall(700, function () { if (s.state === 'play') s.showHint(); }); });
-        else s.afterMove();
+        if (initial) s.time.delayedCall(450, function () { s.state = 'play'; s.lastInput = s.time.now; s.refreshGlow(); s.time.delayedCall(600, function () { if (s.state === 'play') s.showHint(); }); });
+        else { s.tickBomb(); s.afterMove(); }
         return true;
       },
       onCard: function (c) {
         var s = this; if (s.state !== 'play' || c.removed) return;
         s.taps++;
-        if (!c.faceUp || s.covered(c)) { s.shake(c.img); sfx('miss', 0.6); return; }
-        if (!adjacent(c.v, s.top.v)) { s.shake(c.img); sfx('miss', 0.6); return; }
+        if (!c.faceUp || s.covered(c) || !adjacent(c.v, s.top.v)) { s.shake(c.img); sfx('miss', 0.6); return; }
         s.playCard(c);
       },
       shake: function (img) {
@@ -328,64 +396,95 @@
       playCard: function (c) {
         var s = this; c.removed = true; s.top = c; s.streak++;
         sfx('tap' + (1 + (tapIdx++ % 4)), 0.9);
+        s.tweens.killTweensOf([c.glow, c.glow2, c.img]); c.glow.setVisible(false); c.glow2.setVisible(false);
         var im = c.img; im.disableInteractive(); im.setDepth(60 + s.wasteImgs.length);
         var mult = s.multiplier(), gain = 100 * mult;
         s.tweens.add({ targets: im, x: WASTE.x, y: WASTE.y, scale: CARD_SCALE * BIG, angle: (Math.random() - 0.5) * 8, duration: 260, ease: 'Cubic.easeOut', onComplete: function () { im.setAngle(0); } });
         s.wasteImgs.push(im);
         s.updateStreak();
-        if (s.streak > 0 && s.streak % 3 === 0) { sfx('streak', 0.8); s.floatText(360, 230, 'x' + mult + ' STREAK!', '#ffe24a', 44); }
+        if (s.streak > 0 && s.streak % 3 === 0) { sfx('streak', 0.8); s.floatText(360, 240, 'x' + mult + ' STREAK!', '#ffe24a', 44); }
         s.floatText(c.x, c.y - 40, '+' + gain, '#fff8c8', 34);
         s.coinBurst(c.x, c.y, 4 + mult * 2, function () { sfx('balance', 0.5); });
         s.setCoins(s.coins + gain, 600);
-        s.time.delayedCall(180, function () { s.revealUncovered(); s.afterMove(); });
+        if (c.bone) { c.boneIcon.setVisible(false); s.collectBone(c); }
+        if (c.bomb) s.defuseBomb(); else s.tickBomb();
+        s.time.delayedCall(180, function () { s.revealUncovered(); s.refreshGlow(); s.afterMove(); });
       },
       onStock: function () {
         var s = this; if (s.state !== 'play') return;
         s.taps++;
-        if (s.playable().length) { // the real game locks the draw pile while a board move exists
-          sfx('miss', 0.5); s.stockImgs.forEach(function (im) { s.shake(im); }); s.showHint(); return;
-        }
-        if (!s.stockCards.length) { s.endGame(false); return; }
+        if (s.playable().length) { sfx('miss', 0.5); s.stockImgs.forEach(function (im) { s.shake(im); }); s.showHint(); return; }
+        if (!s.stockCards.length) { s.endGame('stuck'); return; }
         sfx('click', 0.7);
         s.drawFromStock(false);
       },
       afterMove: function () {
-        var s = this;
-        if (s.boardLeft() === 0) { s.time.delayedCall(350, function () { s.endGame(true); }); return; }
-        if (!s.stockCards.length && !s.playable().length) { s.time.delayedCall(500, function () { s.endGame(false); }); return; }
-        if (s.taps >= MAX_TAPS) { s.time.delayedCall(500, function () { s.endGame(false); }); return; }
+        var s = this; if (s.ended) return;
+        if (s.boardLeft() === 0) { s.time.delayedCall(350, function () { s.endGame('win'); }); return; }
+        if (!s.stockCards.length && !s.playable().length) { s.time.delayedCall(500, function () { s.endGame('stuck'); }); return; }
+        if (s.taps >= MAX_TAPS) { s.time.delayedCall(500, function () { s.endGame('stuck'); }); return; }
+      },
+
+      // ---------- bomb ----------
+      tickBomb: function () {
+        var s = this; if (s.bombDefused || s.ended || s.bombCount <= 0) return;
+        s.bombCount--;
+        s.bombDigit.setTexture('digit' + Math.max(0, Math.min(9, s.bombCount)));
+        s.tweens.add({ targets: [s.bombImg, s.bombDigit], scale: 1.0, duration: 90, yoyo: true });
+        sfx('tick', 0.8);
+        if (s.bombCount <= 3) { s.bombSkull.setVisible(true); s.tweens.add({ targets: s.bombSkull, scale: 0.75, duration: 200, yoyo: true, repeat: 2 }); s.cameras.main.shake(120, 0.004); }
+        if (s.bombCount <= 0) s.time.delayedCall(250, function () { s.explode(); });
+      },
+      defuseBomb: function () {
+        var s = this; s.bombDefused = true;
+        sfx('bomb_clear', 1);
+        s.bombParts.concat([s.bombSkull]).forEach(function (p) { s.tweens.add({ targets: p, alpha: 0, scale: 0.2, duration: 300 }); });
+        for (var i = 0; i < 8; i++) { var sp = s.add.image(s.bombImg.x, s.bombImg.y, 'bomb_star').setScale(0.5).setDepth(270); var a = i / 8 * Math.PI * 2; s.tweens.add({ targets: sp, x: sp.x + Math.cos(a) * 90, y: sp.y + Math.sin(a) * 90, alpha: 0, duration: 500, onComplete: function (t, ts) { ts[0].destroy(); } }); }
+        s.floatText(s.bombImg.x, s.bombImg.y - 60, 'DEFUSED!', '#9cff6a', 44);
+        s.goalText.setText(s.bones >= BONES_NEEDED ? 'CLEAR THE PEAKS!' : 'BOMB DEFUSED! NOW FEED SAM');
+      },
+      explode: function () {
+        var s = this; if (s.ended) return;
+        s.state = 'end';
+        sfx('explode', 1); s.cameras.main.shake(500, 0.02);
+        var f = s.add.image(s.bombImg.x, s.bombImg.y, 'bomb_fire').setScale(0.4).setDepth(280);
+        s.tweens.add({ targets: f, scale: 3.2, alpha: 0, duration: 700, ease: 'Quad.easeOut', onComplete: function () { f.destroy(); } });
+        for (var i = 0; i < 12; i++) { var sp = s.add.image(s.bombImg.x, s.bombImg.y, 'bomb_spark').setScale(1.4).setDepth(281); var a = Math.random() * Math.PI * 2, r = 120 + Math.random() * 160; s.tweens.add({ targets: sp, x: sp.x + Math.cos(a) * r, y: sp.y + Math.sin(a) * r, alpha: 0, duration: 600 + Math.random() * 300, onComplete: function (t, ts) { ts[0].destroy(); } }); }
+        s.cards.forEach(function (c) { if (!c.removed) s.tweens.add({ targets: c.img, y: c.y + 40 + Math.random() * 60, angle: (Math.random() - 0.5) * 50, alpha: 0.4, duration: 500, delay: 100 }); });
+        s.endGame('bomb');
       },
 
       // ---------- hint ----------
       showHint: function () {
         var s = this; if (s.state !== 'play' || s.ended) return;
-        var p = s.playable(), t = p.length ? { x: p[0].x, y: p[0].y + 92 } : (s.stockCards.length ? { x: STOCK.x, y: STOCK.y + 130 } : null);
+        var p = s.playable(), t = p.length ? { x: p[0].x, y: p[0].y + 112 } : (s.stockCards.length ? { x: STOCK.x, y: STOCK.y + 140 } : null);
         if (!t) return;
         s.hint.setPosition(t.x, t.y).setVisible(true).setAlpha(1);
         if (s.hintTween) s.hintTween.stop();
         s.hintTween = s.tweens.add({ targets: s.hint, y: t.y - 16, duration: 380, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-        if (p.length) s.tweens.add({ targets: p[0].img, scale: CARD_SCALE * 1.08, duration: 200, yoyo: true, repeat: 1 });
       },
       hideHint: function () { if (this.hintTween) this.hintTween.stop(); this.hint.setVisible(false); },
 
       // ---------- end ----------
-      endGame: function (won) {
+      endGame: function (why) {
         var s = this; if (s.ended) return;
-        s.ended = true; s.state = 'end'; s.hideHint();
-        if (won) {
+        s.ended = true; s.state = 'end'; s.hideHint(); s.refreshGlow();
+        var title = document.getElementById('endTitle'), sub = document.getElementById('endSub'), art = document.getElementById('endArt');
+        if (why === 'win') {
           sfx('win', 1); sfx('coins', 0.9);
-          s.floatText(360, 470, 'PEAKS CLEARED!', '#ffe24a', 56);
-          for (var i = 0; i < 3; i++) (function (i) { var st = s.add.image(260 + i * 100, 560, 'star').setScale(0.2).setDepth(260); s.tweens.add({ targets: st, scale: 1.4, duration: 300, delay: 150 + i * 160, ease: 'Back.easeOut' }); s.time.delayedCall(150 + i * 160, function () { sfx('star', 0.7); }); })(i);
-          s.coinBurst(WASTE.x, WASTE.y, 18, null);
-          s.setCoins(s.coins + 1000, 900);
+          s.floatText(360, 420, 'PEAKS CLEARED!', '#ffe24a', 56);
+          for (var i = 0; i < 3; i++) (function (i) { var st = s.add.image(260 + i * 100, 520, 'star').setScale(0.2).setDepth(260); s.tweens.add({ targets: st, scale: 1.4, duration: 300, delay: 150 + i * 160, ease: 'Back.easeOut' }); s.time.delayedCall(150 + i * 160, function () { sfx('star', 0.7); }); })(i);
+          s.coinBurst(WASTE.x, WASTE.y, 18, null); s.setCoins(s.coins + 1000, 900);
+          if (s.bones >= BONES_NEEDED) { title.textContent = 'Sam is fed!'; sub.textContent = 'Harvest your coins and keep feeding Sam in the full game.'; }
+          else { title.textContent = 'Peaks cleared!'; sub.textContent = 'Collect every bone for Sam in the full game.'; }
+        } else if (why === 'bomb') {
+          title.textContent = 'BOOM!'; sub.textContent = 'Defuse bombs with boosters and save Sam’s dinner in the full game.'; art.src = IMAGES.bomb_lost.src;
         } else {
           sfx('lastcard', 0.9);
-          s.floatText(360, 470, 'OUT OF MOVES!', '#ffd0a0', 52);
-          document.getElementById('endTitle').textContent = 'So close!';
-          document.getElementById('endSub').textContent = 'Use Wild cards and boosters to clear every board in the full game.';
-          document.getElementById('endArt').src = IMAGES.wild.src;
+          s.floatText(360, 420, 'OUT OF MOVES!', '#ffd0a0', 52);
+          title.textContent = 'So close!'; sub.textContent = 'Use Wild cards and boosters to clear every board in the full game.'; art.src = IMAGES.wild.src;
         }
-        s.time.delayedCall(won ? 1700 : 1100, function () {
+        s.time.delayedCall(why === 'win' ? 1700 : 1300, function () {
           document.getElementById('endcard').className = 'show';
           window.gameEnd && window.gameEnd();
         });
@@ -397,6 +496,7 @@
       game = new Phaser.Game({
         type: Phaser.AUTO, parent: 'gameContainer', backgroundColor: '#234d1c',
         scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: W, height: H },
+        plugins: { scene: [{ key: 'SpinePlugin', plugin: window.SpinePlugin, mapping: 'spine' }] },
         scene: [Main], render: { antialias: true, pixelArt: false }
       });
     }

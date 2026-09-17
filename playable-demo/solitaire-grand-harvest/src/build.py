@@ -16,6 +16,10 @@ for f, full in entries:
     elif ext == ".m4a": snds[name] = uri(full, "audio/mp4")
 html = open(os.path.join(HERE, "playable.template.html"), encoding="utf-8").read()
 html = html.replace("%%ASSETS_JSON%%", json.dumps(imgs)).replace("%%SOUNDS_JSON%%", json.dumps(snds))
+spine_dir = os.path.join(ASSETS, "spine")
+html = html.replace("%%SPINE_JSON%%", open(os.path.join(spine_dir, "sam.json"), encoding="utf-8").read())
+html = html.replace("%%SPINE_ATLAS%%", json.dumps(open(os.path.join(spine_dir, "sam.atlas"), encoding="utf-8").read()))
+html = html.replace("%%SPINE_PLUGIN%%", open(os.path.join(ASSETS, "vendor", "SpinePlugin.min.js"), encoding="utf-8").read().replace("</script>", "<\\/script>"))
 html = re.sub(r"%%IMG_(\w+)%%", lambda m: imgs[m.group(1)], html)
 assert "%%" not in html, "unreplaced marker"
 open(OUT, "w", encoding="utf-8").write(html)
