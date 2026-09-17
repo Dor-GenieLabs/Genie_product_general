@@ -1,0 +1,558 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>Coin Master Playable</title>
+  <script>
+    var iosLink = "https://apps.apple.com/app/id406889139";
+    var androidLink = "https://play.google.com/store/apps/details?id=com.moonactive.coinmaster";
+    var userAgent = navigator.userAgent || navigator.vendor;
+    var clickTag = /android/i.test(userAgent) ? androidLink : iosLink;
+    var link = iosLink;
+    var link2 = androidLink;
+    var lp_url = clickTag;
+
+    function gameStart() {
+      if (!window.app || !app.gameStart) { setTimeout(gameStart, 250); return; }
+      app.gameStart();
+    }
+    function gameClose() {
+      if (!window.app) return;
+      app.gameClose();
+    }
+    function mobvistaGameReady() { window.gameReady && window.gameReady(); }
+    function mobvistaGameEnd()  { window.gameEnd && window.gameEnd();   }
+  </script>
+  <style>
+    * { padding: 0; margin: 0; -webkit-user-select: none; user-select: none; box-sizing: border-box; }
+    html, body { position: absolute; inset: 0; overflow: hidden; background: #0f2a52; touch-action: none; font-family: "Arial Black", "Arial Bold", Arial, sans-serif; }
+    canvas { position: fixed; top: 0; left: 0; }
+    #gameContainer { position: absolute; inset: 0; }
+    #preloader { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+      background: radial-gradient(circle at 50% 40%, #2d63b0 0%, #0f2a52 70%); z-index: 5; transition: opacity .4s; }
+    #preloader img { width: 60vw; max-width: 340px; }
+    #preloader .bar { width: 50vw; max-width: 280px; height: 10px; border-radius: 6px; background: rgba(0,0,0,.35); overflow: hidden; }
+    #preloader .bar i { display: block; height: 100%; width: 30%; background: #ffcf3f; border-radius: 6px; animation: load 1.1s ease-in-out infinite; }
+    @keyframes load { 0% { transform: translateX(-100%);} 100% { transform: translateX(340%);} }
+    .hide { visibility: hidden; opacity: 0; transition: opacity .5s, visibility .5s; }
+    .show { visibility: visible; opacity: 1; transition: opacity .5s, visibility .5s; }
+    #endcard { position: absolute; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+      background: rgba(6, 18, 40, .82); cursor: pointer; }
+    #endcard .inner { width: min(88vw, 420px); padding: 28px 22px 30px; border-radius: 28px; text-align: center;
+      background: linear-gradient(180deg, #ffe58a 0%, #f8b53c 100%); border: 6px solid #fff3c4; box-shadow: 0 18px 40px rgba(0,0,0,.45); }
+    #endcard .logo { width: 78%; }
+    #endcard .coins { width: 46%; margin: 6px auto 2px; display: block; animation: bob 1.6s ease-in-out infinite; }
+    @keyframes bob { 0%,100% { transform: translateY(0);} 50% { transform: translateY(-8px);} }
+    #endcard h1 { color: #5a2d0c; font-size: clamp(24px, 7vw, 34px); line-height: 1.1; margin: 8px 0 6px; text-shadow: 0 2px 0 #fff6d5; }
+    #endcard p { color: #7a3f12; font-size: clamp(15px, 4.3vw, 20px); font-family: Arial, sans-serif; font-weight: bold; margin-bottom: 18px; }
+    #endcard .cta { display: block; width: 100%; padding: 18px 0; border: 0; border-radius: 50px; cursor: pointer;
+      background: linear-gradient(180deg, #7be04a 0%, #2fa11c 100%); color: #fff; font-family: inherit; font-size: clamp(22px, 6.5vw, 30px);
+      letter-spacing: 1px; text-shadow: 0 3px 0 rgba(0,0,0,.35); box-shadow: 0 6px 0 #1c6d10, 0 12px 24px rgba(0,0,0,.35);
+      animation: pulse .9s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { transform: scale(1);} 50% { transform: scale(1.06);} }
+  </style>
+</head>
+<body>
+  <div id="gameContainer"></div>
+
+  <div id="preloader">
+    <img src="%%IMG_logo%%" alt="" />
+    <div class="bar"><i></i></div>
+  </div>
+
+  <div id="endcard" class="hide">
+    <div class="inner">
+      <img class="logo" src="%%IMG_logo%%" alt="" />
+      <img class="coins" src="%%IMG_coin_stack%%" alt="" />
+      <h1 id="endTitle">You're a natural!</h1>
+      <p id="endSub">Claim 25 FREE spins and keep building your village!</p>
+      <button class="cta" id="ctaBtn">PLAY NOW</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+  <script>
+  (function () {
+    var ASSETS = %%ASSETS_JSON%%;
+    var SOUNDS = %%SOUNDS_JSON%%;
+
+    var W = 720, H = 1280;
+    var FONT = '"Arial Black", "Arial Bold", Arial, sans-serif';
+    var SYMS = ['coin', 'sack', 'shield', 'spins', 'hammer', 'pig'];
+    // Scripted reel results: the hook is coins, then an attack, then a raid.
+    var SCRIPT = [['sack', 'sack', 'sack'], ['hammer', 'hammer', 'hammer'], ['pig', 'pig', 'pig']];
+    var REEL_X = [160, 360, 560], REEL_Y = 877, CELL = 118, ROWS = 5;
+
+    // ---------- audio (HTML5 audio, unlocked by the first tap) ----------
+    var muted = false, audioPool = {};
+    function makeAudio() {
+      for (var k in SOUNDS) { try { var a = new Audio(SOUNDS[k]); a.preload = 'auto'; audioPool[k] = a; } catch (e) {} }
+    }
+    function sfx(k, vol) {
+      if (muted || !audioPool[k]) return;
+      try { var a = audioPool[k].cloneNode(); a.volume = vol == null ? 1 : vol; var p = a.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    }
+    document.addEventListener('visibilitychange', function () { muted = document.hidden; });
+
+    function fmt(n) { return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+    // ---------- main scene ----------
+    var Main = new Phaser.Class({
+      Extends: Phaser.Scene,
+      initialize: function Main() { Phaser.Scene.call(this, { key: 'Main' }); },
+
+      preload: function () {
+        // Phaser's file loader refuses data URIs, so images are decoded up front (see boot below)
+        // and handed to the texture manager directly.
+        for (var k in IMAGES) if (!this.textures.exists(k)) this.textures.addImage(k, IMAGES[k]);
+      },
+
+      create: function () {
+        var s = this;
+        makeAudio();
+        s.coins = 25000; s.spins = 3; s.shields = 0; s.stars = 1;
+        s.spinIndex = 0; s.state = 'idle'; s.lastInput = s.time.now; s.ended = false;
+
+        s.drawBackground();
+        s.drawVillage();
+        s.drawHUD();
+        s.drawSlot();
+        s.buildAttack();
+        s.buildRaid();
+
+        s.hand = s.add.image(0, 0, 'hand').setOrigin(0.18, 0.06).setDepth(200).setVisible(false);
+        s.handTween = null;
+
+        s.input.on('pointerdown', function () { s.lastInput = s.time.now; s.hideHand(); });
+
+        window.app = {
+          gameStart: function () { s.scene.resume(); },
+          gameClose: function () { muted = true; s.scene.pause(); },
+          game: s.game
+        };
+        var pre = document.getElementById('preloader');
+        pre.style.opacity = 0; setTimeout(function () { pre.style.display = 'none'; }, 450);
+        window.gameReady && window.gameReady();
+        s.time.delayedCall(700, function () { s.showHand('spin'); });
+      },
+
+      update: function () {
+        if (this.ended) return;
+        var waiting = { idle: 'spin', attack: 'attack', raid: 'raid', build: 'build' };
+        if (waiting[this.state] && !this.hand.visible && this.time.now - this.lastInput > 3200) this.showHand(waiting[this.state]);
+      },
+
+      // ---------- tutorial hand ----------
+      showHand: function (target) {
+        var s = this, p;
+        if (target === 'spin') p = { x: 380, y: 1140 };
+        else if (target === 'build') p = { x: 615, y: 560 };
+        else if (target === 'attack') p = { x: s.atk.house.x + 10, y: s.atk.house.y + 20 };
+        else if (target === 'raid') { var x = s.raid.spots.filter(function (o) { return !o.dug; })[0]; if (!x) return; p = { x: x.mark.x, y: x.mark.y }; }
+        if (!p) return;
+        s.hand.setPosition(p.x, p.y).setVisible(true).setAlpha(1).setScale(1);
+        if (s.handTween) s.handTween.stop();
+        s.handTween = s.tweens.add({ targets: s.hand, x: p.x + 14, y: p.y + 18, scale: 0.86, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      },
+      hideHand: function () { if (this.handTween) this.handTween.stop(); this.hand.setVisible(false); },
+
+      // ---------- background + village ----------
+      drawBackground: function () {
+        var g = this.add.graphics();
+        g.fillGradientStyle(0x3f8fe6, 0x3f8fe6, 0x9fd6ff, 0x9fd6ff, 1); g.fillRect(0, 0, W, 640);
+        g.fillGradientStyle(0x123a6e, 0x123a6e, 0x0b2246, 0x0b2246, 1); g.fillRect(0, 640, W, H - 640);
+        var cb = this.add.image(360, 250, 'clouds_back').setDisplaySize(W + 40, 330).setAlpha(0.55);
+        var c1 = this.add.image(140, 150, 'clouds_top').setScale(1.1).setAlpha(0.9);
+        var c2 = this.add.image(600, 180, 'clouds_top').setScale(0.8).setAlpha(0.8);
+        this.tweens.add({ targets: c1, x: 200, duration: 9000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: c2, x: 540, duration: 12000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: cb, x: 380, duration: 16000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      },
+
+      drawIsland: function (cx, cy, rx, ry, container) {
+        var g = this.add.graphics();
+        g.fillStyle(0x7a4a22, 1); g.fillEllipse(cx, cy + 34, rx * 2, ry * 2);
+        g.fillStyle(0x5d3617, 1); g.fillEllipse(cx, cy + 22, rx * 2, ry * 2);
+        g.fillStyle(0x62b246, 1); g.fillEllipse(cx, cy, rx * 2, ry * 2);
+        g.fillStyle(0x7ccb57, 1); g.fillEllipse(cx - 10, cy - 12, rx * 1.8, ry * 1.7);
+        g.fillStyle(0xc9a262, 0.9); g.fillEllipse(cx, cy + 20, rx * 0.9, ry * 0.45);
+        if (container) container.add(g);
+        return g;
+      },
+
+      drawVillage: function () {
+        var s = this;
+        s.drawIsland(360, 430, 340, 170);
+        s.add.text(360, 148, 'VIKING VILLAGE', { fontFamily: FONT, fontSize: '30px', color: '#ffffff', stroke: '#1c3f70', strokeThickness: 7 }).setOrigin(0.5);
+        s.starIcon = s.add.image(300, 190, 'star').setScale(0.42);
+        s.starText = s.add.text(330, 190, '1 / 5', { fontFamily: FONT, fontSize: '24px', color: '#fff2a8', stroke: '#1c3f70', strokeThickness: 6 }).setOrigin(0, 0.5);
+        s.house = s.add.image(215, 365, 'house1').setScale(0.72).setOrigin(0.5, 0.85);
+        s.statue = s.add.image(470, 350, 'statue1').setScale(0.75).setOrigin(0.5, 0.9);
+        s.farm = s.add.image(215, 505, 'farm1').setScale(0.62).setOrigin(0.5, 0.75);
+        s.pigs = s.add.image(520, 495, 'pig1').setScale(0.9).setOrigin(0.5, 0.7);
+        s.pigs.setFlipX(true);
+        s.tweens.add({ targets: s.pigs, y: 490, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        // Build button: appears when the player has enough coins for an upgrade.
+        s.buildBtn = s.add.image(620, 560, 'build_btn').setScale(0.7).setAlpha(0).setVisible(false).setInteractive({ useHandCursor: true });
+        s.buildBadge = s.add.text(660, 520, '!', { fontFamily: FONT, fontSize: '30px', color: '#fff', stroke: '#c0261f', strokeThickness: 8 }).setOrigin(0.5).setVisible(false);
+        s.buildBtn.on('pointerdown', function () { s.onBuild(); });
+      },
+
+      // ---------- HUD ----------
+      pill: function (x, y, w, h) {
+        var g = this.add.graphics();
+        g.fillStyle(0x0b1f3d, 0.75); g.fillRoundedRect(x, y, w, h, h / 2);
+        g.lineStyle(3, 0xffffff, 0.18); g.strokeRoundedRect(x, y, w, h, h / 2);
+        return g;
+      },
+      drawHUD: function () {
+        var s = this, st = { fontFamily: FONT, fontSize: '28px', color: '#ffffff', stroke: '#0b1f3d', strokeThickness: 5 };
+        s.pill(28, 34, 300, 70); s.add.image(60, 69, 'hud_coin').setScale(0.5);
+        s.coinText = s.add.text(95, 69, fmt(s.coins), st).setOrigin(0, 0.5);
+        s.pill(348, 34, 150, 70); s.add.image(382, 69, 'hud_spins').setScale(0.48);
+        s.spinsText = s.add.text(412, 69, String(s.spins), st).setOrigin(0, 0.5);
+        s.pill(518, 34, 176, 70);
+        s.shieldSlots = [];
+        for (var i = 0; i < 3; i++) {
+          s.add.image(552 + i * 54, 69, 'shield_slot').setScale(0.5).setAlpha(0.8);
+          s.shieldSlots.push(s.add.image(552 + i * 54, 69, 'hud_shield').setScale(0.48).setVisible(false));
+        }
+        s.coinTarget = { x: 60, y: 69 };
+      },
+      setCoins: function (target, dur) {
+        var s = this, from = s.coins; s.coins = target;
+        s.tweens.addCounter({ from: from, to: target, duration: dur || 900, ease: 'Cubic.easeOut', onUpdate: function (t) { s.coinText.setText(fmt(t.getValue())); } });
+      },
+      coinBurst: function (x, y, n, done) {
+        var s = this, left = n;
+        for (var i = 0; i < n; i++) {
+          (function (i) {
+            var c = s.add.image(x, y, 'hud_coin').setScale(0.55).setDepth(150);
+            var ang = Math.random() * Math.PI * 2, r = 60 + Math.random() * 110;
+            s.tweens.add({ targets: c, x: x + Math.cos(ang) * r, y: y + Math.sin(ang) * r * 0.7, scale: 0.7, duration: 320, ease: 'Quad.easeOut', onComplete: function () {
+              s.tweens.add({ targets: c, x: s.coinTarget.x, y: s.coinTarget.y, scale: 0.35, duration: 520 + i * 40, delay: 120 + i * 30, ease: 'Cubic.easeIn', onComplete: function () {
+                c.destroy(); if (--left === 0 && done) done();
+              } });
+            } });
+          })(i);
+        }
+      },
+      floatText: function (x, y, str, color, size, depth) {
+        var t = this.add.text(x, y, str, { fontFamily: FONT, fontSize: (size || 46) + 'px', color: color || '#ffe14a', stroke: '#5a2d0c', strokeThickness: 8 }).setOrigin(0.5).setDepth(depth || 160).setScale(0.4);
+        this.tweens.add({ targets: t, scale: 1, duration: 260, ease: 'Back.easeOut' });
+        this.tweens.add({ targets: t, y: y - 90, alpha: 0, duration: 900, delay: 700, ease: 'Quad.easeIn', onComplete: function () { t.destroy(); } });
+        return t;
+      },
+
+      // ---------- slot machine ----------
+      drawSlot: function () {
+        var s = this, g = s.add.graphics();
+        g.fillStyle(0x3a1c0a, 1); g.fillRoundedRect(38, 626, 644, 604, 34);
+        g.fillStyle(0x8a4b1f, 1); g.fillRoundedRect(30, 616, 660, 604, 34);
+        g.fillStyle(0xa25c27, 1); g.fillRoundedRect(44, 630, 632, 100, 26);
+        g.lineStyle(8, 0xf5c542, 1); g.strokeRoundedRect(30, 616, 660, 604, 34);
+        s.add.image(360, 664, 'logo').setScale(0.78);
+        // reel window
+        g.fillStyle(0x2a1508, 1); g.fillRoundedRect(52, 692, 616, 370, 26);
+        g.fillStyle(0xfff3d8, 1); g.fillRoundedRect(60, 700, 600, 354, 22);
+        g.lineStyle(6, 0xf5c542, 1); g.strokeRoundedRect(60, 700, 600, 354, 22);
+        g.fillStyle(0xffd66b, 0.35); g.fillRect(64, REEL_Y - CELL / 2, 592, CELL);
+        g.lineStyle(2, 0x6b3b12, 0.35); g.lineBetween(260, 704, 260, 1050); g.lineBetween(460, 704, 460, 1050);
+        g.fillStyle(0xf5c542, 1);
+        g.fillTriangle(42, REEL_Y - 18, 42, REEL_Y + 18, 72, REEL_Y); g.fillTriangle(678, REEL_Y - 18, 678, REEL_Y + 18, 648, REEL_Y);
+        // reels
+        var maskShape = s.make.graphics({ add: false }); maskShape.fillRect(64, 704, 592, 346);
+        var mask = maskShape.createGeometryMask();
+        s.reels = []; REEL_X.forEach(function (x) { s.reels.push(s.makeReel(x, REEL_Y, mask)); });
+        // glass shine
+        var sh = s.add.graphics(); sh.fillStyle(0xffffff, 0.08); sh.fillRoundedRect(64, 704, 592, 130, { tl: 22, tr: 22, bl: 0, br: 0 });
+        // spin button
+        s.spinBtn = s.add.image(360, 1150, 'spin_btn').setScale(0.86).setInteractive({ useHandCursor: true });
+        s.spinBtn.on('pointerdown', function () { s.onSpin(); });
+        s.tweens.add({ targets: s.spinBtn, scale: 0.9, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      },
+
+      makeReel: function (x, y, mask) {
+        var s = this, c = s.add.container(x, y); c.setMask(mask);
+        var r = { c: c, sprites: [], blur: false };
+        for (var i = 0; i < ROWS; i++) {
+          var img = s.add.image(0, (i - 2) * CELL, 'sym_' + SYMS[(i * 2 + s.reels.length * 1 + Math.floor(Math.random() * 6)) % SYMS.length]);
+          s.fit(img, 110); c.add(img); r.sprites.push(img);
+        }
+        return r;
+      },
+      fit: function (img, size) {
+        var sc = Math.min(size / img.width, size / img.height); img.setScale(sc); return img;
+      },
+      setSym: function (img, key, blur) {
+        img.setTexture((blur ? 'blur_' : 'sym_') + key);
+        if (blur) img.setScale(Math.min(110 / img.width, 150 / img.height)); else this.fit(img, 110);
+      },
+      centerIndex: function (idx) { var total = 18 + idx * 5; return ((2 - total) % ROWS + ROWS) % ROWS; },
+      spinReel: function (reel, idx, result, done) {
+        var s = this, total = 18 + idx * 5, obj = { v: 0 }, last = 0;
+        reel.blur = false;
+        s.tweens.add({ targets: obj, v: total, duration: 1500 + idx * 380, ease: 'Quad.easeOut',
+          onUpdate: function (tw) {
+            var p = tw.progress, v = obj.v;
+            if (p < 0.72 && !reel.blur) { reel.blur = true; reel.sprites.forEach(function (im) { s.setSym(im, Phaser.Utils.Array.GetRandom(SYMS), true); }); }
+            if (p >= 0.72 && reel.blur) {
+              reel.blur = false;
+              var center = s.centerIndex(idx);
+              reel.sprites.forEach(function (im, i) { s.setSym(im, i === center ? result : Phaser.Utils.Array.GetRandom(SYMS), false); });
+            }
+            if (reel.blur && Math.floor(v) !== last) { last = Math.floor(v); reel.sprites.forEach(function (im) { if (Math.random() < 0.3) s.setSym(im, Phaser.Utils.Array.GetRandom(SYMS), true); }); }
+            var span = ROWS * CELL;
+            reel.sprites.forEach(function (im, i) { im.y = ((((i - 2) * CELL + v * CELL) % span) + span + span / 2) % span - span / 2; });
+          },
+          onComplete: function () {
+            sfx('stop' + (idx + 1), 0.9);
+            s.tweens.add({ targets: reel.c, y: REEL_Y + 14, duration: 90, yoyo: true, ease: 'Quad.easeOut' });
+            done();
+          } });
+      },
+
+      onSpin: function () {
+        var s = this;
+        if (s.ended) return;
+        if (s.state === 'build') { s.state = 'idle'; s.buildBtn.setVisible(false); s.buildBadge.setVisible(false); }
+        if (s.state !== 'idle') return;
+        if (s.spins <= 0) {
+          sfx('nocoins', 0.9);
+          s.tweens.add({ targets: [s.spinsText], x: 420, duration: 60, yoyo: true, repeat: 4 });
+          s.time.delayedCall(700, function () { s.endGame(); });
+          return;
+        }
+        s.state = 'spinning'; s.hideHand();
+        s.spins--; s.spinsText.setText(String(s.spins));
+        sfx('button', 0.8); sfx('spin', 0.9);
+        s.tweens.add({ targets: s.spinBtn, scale: 0.78, duration: 80, yoyo: true });
+        var result = SCRIPT[s.spinIndex % SCRIPT.length]; s.spinIndex++;
+        var left = 3;
+        s.reels.forEach(function (r, i) { s.spinReel(r, i, result[i], function () { if (--left === 0) s.onResult(result); }); });
+      },
+
+      onResult: function (result) {
+        var s = this, kind = result[0];
+        // highlight the payline
+        s.reels.forEach(function (r, ri) { var im = r.sprites[s.centerIndex(ri)]; s.tweens.add({ targets: im, scale: im.scale * 1.18, duration: 180, yoyo: true, repeat: 2 }); });
+        if (kind === 'sack') {
+          s.time.delayedCall(350, function () {
+            sfx('coins', 1);
+            s.floatText(360, 890, '+100,000', '#ffe14a', 54);
+            s.coinBurst(360, 890, 14, function () { sfx('collect', 0.8); });
+            s.setCoins(s.coins + 100000, 1100);
+            s.time.delayedCall(1300, function () { s.state = 'idle'; s.showHand('spin'); });
+          });
+        } else if (kind === 'hammer') {
+          s.time.delayedCall(500, function () { s.openAttack(); });
+        } else if (kind === 'pig') {
+          s.time.delayedCall(500, function () { s.openRaid(); });
+        } else {
+          s.state = 'idle';
+        }
+      },
+
+      // ---------- attack ----------
+      buildAttack: function () {
+        var s = this, c = s.add.container(0, 0).setDepth(100).setVisible(false);
+        var dark = s.add.graphics(); dark.fillStyle(0x03101f, 0.86); dark.fillRect(0, 0, W, H); c.add(dark);
+        var panel = s.add.graphics(); panel.fillStyle(0x1b5fb3, 1); panel.fillRoundedRect(30, 150, 660, 980, 34); panel.lineStyle(8, 0xffd24a, 1); panel.strokeRoundedRect(30, 150, 660, 980, 34);
+        panel.fillGradientStyle(0x5db3ff, 0x5db3ff, 0xbfe6ff, 0xbfe6ff, 1); panel.fillRoundedRect(46, 250, 628, 660, 24); c.add(panel);
+        c.add(s.add.image(360, 150, 'sym_hammer').setScale(0.75));
+        c.add(s.add.text(360, 215, 'ATTACK!', { fontFamily: FONT, fontSize: '54px', color: '#fff', stroke: '#8a1c12', strokeThickness: 10 }).setOrigin(0.5));
+        s.drawIsland(360, 620, 300, 160, c);
+        c.add(s.add.image(175, 545, 'ship4').setScale(0.52).setOrigin(0.5, 0.8));
+        c.add(s.add.image(585, 610, 'statue4').setScale(0.5).setOrigin(0.5, 0.9));
+        c.add(s.add.image(235, 705, 'farm4').setScale(0.5).setOrigin(0.5, 0.75));
+        var house = s.add.image(415, 640, 'house4').setScale(0.58).setOrigin(0.5, 0.8); c.add(house);
+        var target = s.add.image(house.x, house.y - 90, 'target').setScale(0.75); c.add(target);
+        var nameT = s.add.text(360, 285, "Ragnar's Village", { fontFamily: FONT, fontSize: '30px', color: '#fff', stroke: '#1b5fb3', strokeThickness: 6 }).setOrigin(0.5); c.add(nameT);
+        var hint = s.add.text(360, 1000, 'TAP TO ATTACK!', { fontFamily: FONT, fontSize: '42px', color: '#ffe14a', stroke: '#8a1c12', strokeThickness: 9 }).setOrigin(0.5); c.add(hint);
+        var hammer = s.add.image(house.x + 40, house.y - 520, 'hammer_big').setScale(1.1).setAngle(-40).setVisible(false); c.add(hammer);
+        var zone = s.add.zone(360, 640, 660, 980).setInteractive({ useHandCursor: true }); c.add(zone);
+        zone.on('pointerdown', function () { s.doAttack(); });
+        s.atk = { c: c, house: house, target: target, hint: hint, hammer: hammer, zone: zone, hit: false };
+      },
+      openAttack: function () {
+        var s = this, a = s.atk; s.state = 'attack'; a.hit = false;
+        a.house.setTexture('house4'); a.hammer.setVisible(false).setPosition(a.house.x + 40, a.house.y - 520).setAngle(-40);
+        a.c.setVisible(true).setAlpha(0); s.tweens.add({ targets: a.c, alpha: 1, duration: 300 });
+        s.tweens.add({ targets: a.target, scale: 0.6, duration: 380, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        s.tweens.add({ targets: a.hint, scale: 1.08, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        s.time.delayedCall(700, function () { if (s.state === 'attack') s.showHand('attack'); });
+      },
+      doAttack: function () {
+        var s = this, a = s.atk;
+        if (s.state !== 'attack' || a.hit) return;
+        a.hit = true; s.hideHand(); s.tweens.killTweensOf(a.target); a.target.setScale(0.75);
+        a.hint.setText('SMASH!'); a.hammer.setVisible(true);
+        sfx('button', 0.6);
+        s.tweens.add({ targets: a.hammer, y: a.house.y - 110, angle: 30, duration: 380, ease: 'Cubic.easeIn', onComplete: function () {
+          sfx('hit', 1); s.cameras.main.shake(260, 0.012);
+          a.house.setTexture('house4_dmg'); a.target.setVisible(false);
+          var smokes = [];
+          for (var i = 0; i < 4; i++) {
+            var sm = s.add.image(a.house.x - 60 + i * 40, a.house.y - 40, 'smoke').setScale(0.6).setAlpha(0.9).setDepth(101);
+            s.tweens.add({ targets: sm, y: sm.y - 120 - i * 20, scale: 1.4, alpha: 0, duration: 900, delay: i * 60, onComplete: function (t, ts) { ts[0].destroy(); } });
+          }
+          s.tweens.add({ targets: a.hammer, alpha: 0, y: a.hammer.y - 60, duration: 500, delay: 200 });
+          s.time.delayedCall(450, function () {
+            sfx('attack_win', 0.9);
+            s.floatText(360, 560, '+150,000', '#ffe14a', 60, 170);
+            s.coinBurst(a.house.x, a.house.y - 60, 16, null);
+            s.setCoins(s.coins + 150000, 1200);
+          });
+          s.time.delayedCall(1900, function () {
+            s.tweens.add({ targets: a.c, alpha: 0, duration: 350, onComplete: function () {
+              a.c.setVisible(false); a.target.setVisible(true); a.hint.setText('TAP TO ATTACK!'); a.hammer.setAlpha(1);
+              s.state = 'idle'; s.showHand('spin');
+            } });
+          });
+        } });
+      },
+
+      // ---------- raid ----------
+      buildRaid: function () {
+        var s = this, c = s.add.container(0, 0).setDepth(100).setVisible(false);
+        var dark = s.add.graphics(); dark.fillStyle(0x03101f, 0.86); dark.fillRect(0, 0, W, H); c.add(dark);
+        var panel = s.add.graphics(); panel.fillStyle(0xd2418c, 1); panel.fillRoundedRect(30, 150, 660, 980, 34); panel.lineStyle(8, 0xffd24a, 1); panel.strokeRoundedRect(30, 150, 660, 980, 34);
+        panel.fillGradientStyle(0x7ccb57, 0x7ccb57, 0x4f9c3a, 0x4f9c3a, 1); panel.fillRoundedRect(46, 250, 628, 660, 24);
+        panel.fillStyle(0x8a5a2b, 1); panel.fillEllipse(360, 620, 560, 380); panel.fillStyle(0xa9773a, 1); panel.fillEllipse(360, 606, 520, 340); c.add(panel);
+        c.add(s.add.image(360, 150, 'sym_pig').setScale(0.8));
+        c.add(s.add.text(360, 215, 'RAID!', { fontFamily: FONT, fontSize: '54px', color: '#fff', stroke: '#8a1c5a', strokeThickness: 10 }).setOrigin(0.5));
+        c.add(s.add.text(360, 285, "Erik's Village", { fontFamily: FONT, fontSize: '30px', color: '#fff', stroke: '#6b2d0a', strokeThickness: 6 }).setOrigin(0.5));
+        c.add(s.add.image(150, 560, 'house1').setScale(0.42).setOrigin(0.5, 0.85));
+        c.add(s.add.image(590, 540, 'statue1').setScale(0.55).setOrigin(0.5, 0.9));
+        var hint = s.add.text(360, 1000, 'DIG FOR COINS!', { fontFamily: FONT, fontSize: '42px', color: '#ffe14a', stroke: '#6b2d0a', strokeThickness: 9 }).setOrigin(0.5); c.add(hint);
+        var shovels = [];
+        for (var i = 0; i < 3; i++) { var sv = s.add.image(560 + i * 46, 340, 'shovel').setScale(0.42); c.add(sv); shovels.push(sv); }
+        var pos = [[250, 520], [470, 500], [300, 700], [520, 690]];
+        var loot = [{ key: 'chest_gold', amt: 120000, sc: 0.9 }, { key: 'sack_big', amt: 70000, sc: 0.6 }, { key: 'chest_wood', amt: 90000, sc: 0.85 }, { key: 'sym_coin', amt: 40000, sc: 0.8 }];
+        var spots = pos.map(function (p, i) {
+          var dirt = s.add.image(p[0], p[1] + 12, 'dirt').setScale(1.2).setAlpha(0.7); c.add(dirt);
+          var mark = s.add.image(p[0], p[1], 'xmark').setScale(0.55).setInteractive({ useHandCursor: true }); c.add(mark);
+          s.tweens.add({ targets: mark, scale: 0.62, duration: 500 + i * 90, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+          var hole = s.add.image(p[0], p[1] + 6, 'hole').setScale(0.9).setVisible(false); c.add(hole);
+          var o = { mark: mark, hole: hole, loot: loot[i], dug: false, x: p[0], y: p[1] };
+          mark.on('pointerdown', function () { s.doDig(o); });
+          return o;
+        });
+        s.raid = { c: c, spots: spots, shovels: shovels, hint: hint, digs: 0, total: 0 };
+      },
+      openRaid: function () {
+        var s = this, r = s.raid; s.state = 'raid'; r.digs = 0; r.total = 0;
+        r.spots.forEach(function (o) { o.dug = false; o.mark.setVisible(true).setAlpha(1); o.hole.setVisible(false); });
+        r.shovels.forEach(function (sv) { sv.setAlpha(1); });
+        r.hint.setText('DIG FOR COINS!');
+        r.c.setVisible(true).setAlpha(0); s.tweens.add({ targets: r.c, alpha: 1, duration: 300 });
+        s.time.delayedCall(700, function () { if (s.state === 'raid') s.showHand('raid'); });
+      },
+      doDig: function (o) {
+        var s = this, r = s.raid;
+        if (s.state !== 'raid' || o.dug || r.digs >= 3) return;
+        o.dug = true; r.digs++; s.hideHand();
+        r.shovels[3 - r.digs].setAlpha(0.3);
+        sfx('dig', 1);
+        var sv = s.add.image(o.x + 40, o.y - 70, 'shovel').setScale(0.6).setAngle(-30).setDepth(102);
+        s.tweens.add({ targets: sv, angle: 25, y: o.y - 20, duration: 220, yoyo: true, repeat: 1, ease: 'Quad.easeInOut', onComplete: function () { sv.destroy(); } });
+        s.tweens.add({ targets: o.mark, alpha: 0, scale: 0.3, duration: 250 });
+        s.time.delayedCall(300, function () {
+          o.hole.setVisible(true).setScale(0.4); s.tweens.add({ targets: o.hole, scale: 0.9, duration: 220, ease: 'Back.easeOut' });
+        });
+        s.time.delayedCall(650, function () {
+          sfx('chest', 0.9);
+          var it = s.add.image(o.x, o.y - 10, o.loot.key).setScale(0.2).setDepth(102);
+          s.tweens.add({ targets: it, scale: o.loot.sc, y: o.y - 70, duration: 320, ease: 'Back.easeOut' });
+          s.floatText(o.x, o.y - 120, '+' + fmt(o.loot.amt), '#ffe14a', 44, 170);
+          s.coinBurst(o.x, o.y - 60, 8, null);
+          r.total += o.loot.amt; s.setCoins(s.coins + o.loot.amt, 800);
+          s.tweens.add({ targets: it, alpha: 0, y: o.y - 120, duration: 400, delay: 900, onComplete: function () { it.destroy(); } });
+          if (r.digs >= 3) {
+            r.hint.setText('YOU RAIDED ' + fmt(r.total) + '!');
+            s.time.delayedCall(900, function () {
+              sfx('steal_win', 0.9);
+              s.time.delayedCall(1100, function () {
+                s.tweens.add({ targets: r.c, alpha: 0, duration: 350, onComplete: function () { r.c.setVisible(false); s.startBuild(); } });
+              });
+            });
+          } else {
+            s.time.delayedCall(500, function () { if (s.state === 'raid') s.showHand('raid'); });
+          }
+        });
+      },
+
+      // ---------- build ----------
+      startBuild: function () {
+        var s = this; s.state = 'build';
+        s.buildBtn.setVisible(true); s.buildBadge.setVisible(true);
+        s.tweens.add({ targets: s.buildBtn, alpha: 1, duration: 250 });
+        s.buildPulse = s.tweens.add({ targets: s.buildBtn, scale: 0.8, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        s.floatText(360, 560, 'BUILD YOUR VILLAGE!', '#ffffff', 38, 150);
+        s.time.delayedCall(600, function () { if (s.state === 'build') s.showHand('build'); });
+      },
+      onBuild: function () {
+        var s = this;
+        if (s.state !== 'build') return;
+        s.state = 'building'; s.hideHand();
+        if (s.buildPulse) s.buildPulse.stop();
+        s.buildBtn.setVisible(false); s.buildBadge.setVisible(false);
+        sfx('button', 0.8); sfx('build', 1);
+        s.setCoins(Math.max(0, s.coins - 150000), 700);
+        s.floatText(s.coinTarget.x + 120, 120, '-150,000', '#ff7c6b', 34, 150);
+        var hx = s.house.x, hy = s.house.y - 90;
+        for (var i = 0; i < 6; i++) {
+          var sm = s.add.image(hx - 70 + i * 28, hy + 30, 'smoke').setScale(0.5).setAlpha(0.95).setDepth(20);
+          s.tweens.add({ targets: sm, y: sm.y - 90 - (i % 3) * 30, scale: 1.3, alpha: 0, duration: 800, delay: i * 70, onComplete: function (t, ts) { ts[0].destroy(); } });
+        }
+        s.tweens.add({ targets: s.house, scaleX: 0.5, scaleY: 0.9, duration: 120, yoyo: true, repeat: 2 });
+        s.time.delayedCall(520, function () {
+          s.house.setTexture('house2').setScale(0.2);
+          s.tweens.add({ targets: s.house, scale: 0.62, duration: 420, ease: 'Back.easeOut' });
+          s.stars = 2; s.starText.setText('2 / 5');
+          s.tweens.add({ targets: s.starIcon, scale: 0.6, duration: 200, yoyo: true });
+          sfx('shield', 0.7);
+          s.floatText(s.house.x, s.house.y - 200, 'LEVEL UP!', '#ffe14a', 46, 150);
+        });
+        s.time.delayedCall(1900, function () { s.endGame(); });
+      },
+
+      // ---------- end ----------
+      endGame: function () {
+        var s = this; if (s.ended) return;
+        s.ended = true; s.hideHand(); s.state = 'end';
+        var ec = document.getElementById('endcard');
+        ec.className = 'show';
+        window.gameEnd && window.gameEnd();
+      }
+    });
+
+    var IMAGES = {}, game = null;
+    function boot() {
+      game = new Phaser.Game({
+        type: Phaser.AUTO, parent: 'gameContainer', backgroundColor: '#0f2a52',
+        scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: W, height: H },
+        scene: [Main], render: { antialias: true, pixelArt: false }
+      });
+    }
+    (function decodeAll() {
+      var keys = Object.keys(ASSETS), left = keys.length;
+      keys.forEach(function (k) {
+        var im = new Image();
+        im.onload = im.onerror = function () { IMAGES[k] = im; if (--left === 0) boot(); };
+        im.src = ASSETS[k];
+      });
+    })();
+
+    function goStore(e) { if (e) { e.preventDefault(); e.stopPropagation(); } window.open(clickTag, '_blank'); }
+    var ec = document.getElementById('endcard');
+    ec.addEventListener('click', goStore);
+    ec.addEventListener('touchend', goStore);
+    document.getElementById('ctaBtn').addEventListener('click', goStore);
+    window.addEventListener('resize', function () { if (game) game.scale.refresh(); });
+    // TODO: hook analytics here
+  })();
+  </script>
+</body>
+</html>
