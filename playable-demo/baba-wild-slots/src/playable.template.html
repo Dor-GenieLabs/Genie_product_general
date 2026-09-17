@@ -1,0 +1,596 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>Baba Wild Slots Playable</title>
+  <script>
+    var iosLink = "https://apps.apple.com/app/id1059186689";
+    var androidLink = "https://play.google.com/store/apps/details?id=com.bws";
+    var userAgent = navigator.userAgent || navigator.vendor;
+    var clickTag = /android/i.test(userAgent) ? androidLink : iosLink;
+    var link = iosLink;
+    var link2 = androidLink;
+    var lp_url = clickTag;
+
+    function gameStart() {
+      if (!window.app || !app.gameStart) { setTimeout(gameStart, 250); return; }
+      app.gameStart();
+    }
+    function gameClose() {
+      if (!window.app) return;
+      app.gameClose();
+    }
+    function mobvistaGameReady() { window.gameReady && window.gameReady(); }
+    function mobvistaGameEnd()  { window.gameEnd && window.gameEnd();   }
+  </script>
+  <style>
+    * { padding: 0; margin: 0; -webkit-user-select: none; user-select: none; box-sizing: border-box; }
+    html, body { position: absolute; inset: 0; overflow: hidden; background: #2a0a2e; touch-action: none; font-family: "Arial Black", "Arial Bold", Arial, sans-serif; }
+    canvas { position: fixed; top: 0; left: 0; }
+    #gameContainer { position: absolute; inset: 0; }
+    #preloader { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+      background: radial-gradient(circle at 50% 40%, #7a1d5c 0%, #2a0a2e 70%); z-index: 5; transition: opacity .4s; }
+    #preloader img { width: 62vw; max-width: 340px; }
+    #preloader .bar { width: 50vw; max-width: 280px; height: 10px; border-radius: 6px; background: rgba(0,0,0,.4); overflow: hidden; }
+    #preloader .bar i { display: block; height: 100%; width: 30%; background: #ffd23f; border-radius: 6px; animation: load 1.1s ease-in-out infinite; }
+    @keyframes load { 0% { transform: translateX(-100%);} 100% { transform: translateX(340%);} }
+    .hide { visibility: hidden; opacity: 0; transition: opacity .5s, visibility .5s; }
+    .show { visibility: visible; opacity: 1; transition: opacity .5s, visibility .5s; }
+    #endcard { position: absolute; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+      background: rgba(20, 4, 28, .84); cursor: pointer; }
+    #endcard .inner { width: min(88vw, 420px); padding: 22px 20px 26px; border-radius: 30px; text-align: center; position: relative;
+      background: linear-gradient(180deg, #5b1470 0%, #2c0a3d 100%); border: 5px solid #ffd23f; box-shadow: 0 0 40px rgba(255, 90, 200, .45), 0 18px 40px rgba(0,0,0,.5); }
+    #endcard .logo { width: 74%; }
+    #endcard .tony { width: 58%; margin: -6px auto 0; display: block; animation: bob 1.6s ease-in-out infinite; }
+    @keyframes bob { 0%,100% { transform: translateY(0);} 50% { transform: translateY(-8px);} }
+    #endcard h1 { color: #ffd23f; font-size: clamp(22px, 6.6vw, 32px); line-height: 1.1; margin: 4px 0 6px; text-shadow: 0 3px 0 #7a1d0c, 0 0 18px rgba(255, 210, 63, .5); }
+    #endcard p { color: #fff; font-size: clamp(15px, 4.2vw, 19px); font-family: Arial, sans-serif; font-weight: bold; margin-bottom: 16px; }
+    #endcard .cta { display: block; width: 100%; padding: 18px 0; border: 0; border-radius: 50px; cursor: pointer;
+      background: linear-gradient(180deg, #8ef05a 0%, #2fa11c 100%); color: #fff; font-family: inherit; font-size: clamp(22px, 6.5vw, 30px);
+      letter-spacing: 1px; text-shadow: 0 3px 0 rgba(0,0,0,.35); box-shadow: 0 6px 0 #1c6d10, 0 12px 24px rgba(0,0,0,.35);
+      animation: pulse .9s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { transform: scale(1);} 50% { transform: scale(1.06);} }
+  </style>
+</head>
+<body>
+  <div id="gameContainer"></div>
+
+  <div id="preloader">
+    <img src="%%IMG_logo_baba%%" alt="" />
+    <div class="bar"><i></i></div>
+  </div>
+
+  <div id="endcard" class="hide">
+    <div class="inner">
+      <img class="logo" src="%%IMG_logo_baba%%" alt="" />
+      <img class="tony" src="%%IMG_tony%%" alt="" />
+      <h1 id="endTitle">BABASTIC WIN!</h1>
+      <p id="endSub">Claim 10,000,000 FREE coins and spin 100+ slots!</p>
+      <button class="cta" id="ctaBtn">PLAY NOW</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+  <script>
+  (function () {
+    var ASSETS = %%ASSETS_JSON%%;
+    var SOUNDS = %%SOUNDS_JSON%%;
+
+    var W = 720, H = 1280;
+    var FONT = '"Arial Black", "Arial Bold", Arial, sans-serif';
+    var SYMS = ['seven', 'wild', 'coin', 'crown', 'star', 'gem', 'crystal', 'chest'];
+    var FILL = ['coin', 'crown', 'star', 'gem', 'crystal', 'chest'];   // random reel filler (sevens only land when scripted)
+    var REEL_X = [112, 236, 360, 484, 608], CELL_W = 124, CELL_H = 125, WIN_Y = 425, WIN_H = 375, CENTER_Y = WIN_Y + WIN_H / 2;
+    var BET = 50000, START_COINS = 2500000;
+    var JACKPOTS = { 9: 25000000, 8: 10000000, 7: 5000000, 6: 2500000, 5: 1000000 };
+    // Scripted spins. Each reel lists its 3 visible symbols top -> bottom.
+    var SCRIPT = [
+      { grid: [['gem', 'seven', 'coin'], ['crown', 'wild', 'star'], ['chest', 'seven', 'crystal'], ['star', 'coin', 'gem'], ['coin', 'crystal', 'chest']],
+        kind: 'line', win: 300000 },
+      { grid: [['gem', 'seven', 'coin'], ['seven', 'crown', 'star'], ['chest', 'seven', 'crystal'], ['coin', 'gem', 'seven'], ['star', 'seven', 'gem']],
+        kind: 'jackpot', win: JACKPOTS[5], anticipate: true }
+    ];
+
+    // ---------- audio (HTML5 audio, unlocked by the first tap) ----------
+    var muted = false, audioPool = {}, spinLoop = null;
+    function makeAudio() {
+      for (var k in SOUNDS) { try { var a = new Audio(SOUNDS[k]); a.preload = 'auto'; audioPool[k] = a; } catch (e) {} }
+    }
+    function sfx(k, vol) {
+      if (muted || !audioPool[k]) return null;
+      try { var a = audioPool[k].cloneNode(); a.volume = vol == null ? 1 : vol; var p = a.play(); if (p && p.catch) p.catch(function () {}); return a; } catch (e) { return null; }
+    }
+    function startSpinLoop() { stopSpinLoop(); spinLoop = sfx('spin', 0.7); if (spinLoop) spinLoop.loop = true; }
+    function stopSpinLoop() { if (spinLoop) { try { spinLoop.pause(); } catch (e) {} spinLoop = null; } }
+    document.addEventListener('visibilitychange', function () { muted = document.hidden; if (muted) stopSpinLoop(); });
+
+    function fmt(n) { return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+    function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+    // ---------- main scene ----------
+    var Main = new Phaser.Class({
+      Extends: Phaser.Scene,
+      initialize: function Main() { Phaser.Scene.call(this, { key: 'Main' }); },
+
+      preload: function () {
+        // Phaser's file loader refuses data URIs, so images are decoded up front (see boot below)
+        // and handed to the texture manager directly.
+        for (var k in IMAGES) {
+          if (this.textures.exists(k)) continue;
+          if (k === 'seven_anim') this.textures.addSpriteSheet(k, IMAGES[k], { frameWidth: 120, frameHeight: 118 });
+          else this.textures.addImage(k, IMAGES[k]);
+        }
+      },
+
+      create: function () {
+        var s = this;
+        makeAudio();
+        s.coins = START_COINS; s.spinIndex = 0; s.state = 'idle'; s.lastInput = s.time.now; s.ended = false; s.winShown = 0;
+        s.anims.create({ key: 'flame', frames: s.anims.generateFrameNumbers('seven_anim', { start: 0, end: 9 }), frameRate: 16, repeat: -1 });
+
+        s.drawBackground();
+        s.drawCabinet();
+        s.drawReels();
+        s.drawDeck();
+        s.drawHUD();
+        s.drawHostess();
+        s.buildBigWin();
+
+        s.hand = s.add.image(0, 0, 'hand').setOrigin(0.25, 0.1).setScale(0.75).setDepth(200).setVisible(false);
+        s.handTween = null;
+        s.input.on('pointerdown', function () { s.lastInput = s.time.now; s.hideHand(); });
+
+        window.app = {
+          gameStart: function () { s.scene.resume(); },
+          gameClose: function () { muted = true; stopSpinLoop(); s.scene.pause(); },
+          game: s.game
+        };
+        var pre = document.getElementById('preloader');
+        pre.style.opacity = 0; setTimeout(function () { pre.style.display = 'none'; }, 450);
+        window.gameReady && window.gameReady();
+        s.time.delayedCall(700, function () { s.showHand(); });
+      },
+
+      update: function (t) {
+        if (this.ended) return;
+        if (this.state === 'idle' && !this.hand.visible && this.time.now - this.lastInput > 3200) this.showHand();
+        // running lights around the reel window
+        var phase = Math.floor(t / 110);
+        for (var i = 0; i < this.lamps.length; i++) {
+          var on = ((i + phase) % 3) === 0;
+          this.lamps[i].setAlpha(on ? 1 : 0.35).setScale(on ? 0.5 : 0.42);
+        }
+      },
+
+      // ---------- tutorial hand ----------
+      showHand: function () {
+        var s = this, p = { x: 395, y: 950 };
+        if (s.ended || s.state !== 'idle') return;
+        s.hand.setPosition(p.x, p.y).setVisible(true).setAlpha(1);
+        if (s.handTween) s.handTween.stop();
+        s.hand.setScale(0.75);
+        s.handTween = s.tweens.add({ targets: s.hand, x: p.x + 10, y: p.y + 14, scale: 0.64, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      },
+      hideHand: function () { if (this.handTween) this.handTween.stop(); this.hand.setVisible(false); },
+
+      // ---------- background ----------
+      drawBackground: function () {
+        var s = this;
+        s.add.image(360, 640, 'bg').setDisplaySize(760, 1284);
+        var g = s.add.graphics();
+        g.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.35, 0.35, 0, 0); g.fillRect(0, 0, W, 200);
+        g.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.55, 0.55); g.fillRect(0, 980, W, 300);
+      },
+
+      // ---------- Burning Hot cabinet: marquee + jackpot panel + reel frame ----------
+      drawCabinet: function () {
+        var s = this;
+        s.logoBH = s.add.image(360, 120, 'logo_bh').setScale(0.52).setDepth(6);
+        s.tweens.add({ targets: s.logoBH, scale: 0.55, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        s.add.image(360, 278, 'panel').setDepth(3);
+        // jackpot values for ANY 9..5 sevens, laid over the panel's empty value boxes
+        s.jpRows = {};
+        var counts = [9, 8, 7, 6, 5];
+        counts.forEach(function (n, i) {
+          var y = 198 + i * 41.4;
+          var hl = s.add.graphics().setDepth(4).setVisible(false);
+          hl.fillStyle(0xffd23f, 0.55); hl.fillRoundedRect(258, y - 17, 372, 34, 8);
+          var t = s.add.text(612, y, fmt(JACKPOTS[n]), { fontFamily: FONT, fontSize: '21px', color: '#ffd23f', stroke: '#3a1200', strokeThickness: 3 }).setOrigin(1, 0.5).setDepth(5);
+          s.jpRows[n] = { hl: hl, text: t };
+        });
+        // reel frame
+        var g = s.add.graphics().setDepth(3);
+        g.fillStyle(0x2a0810, 1); g.fillRoundedRect(20, 408, 680, 410, 26);
+        g.fillStyle(0x5a1424, 1); g.fillRoundedRect(24, 412, 672, 402, 24);
+        g.lineStyle(5, 0xffb347, 1); g.strokeRoundedRect(24, 412, 672, 402, 24);
+        g.fillStyle(0x1a0508, 1); g.fillRoundedRect(44, 419, 632, 387, 14);
+        g.fillGradientStyle(0xfff6e2, 0xfff6e2, 0xf6d9b4, 0xf6d9b4, 1); g.fillRoundedRect(50, 425, 620, 375, 12);
+        // window shading (top/bottom darkening like the real cabinet)
+        var sh = s.add.graphics().setDepth(8);
+        sh.fillGradientStyle(0x3a1a08, 0x3a1a08, 0x3a1a08, 0x3a1a08, 0.45, 0.45, 0, 0); sh.fillRect(50, 425, 620, 70);
+        sh.fillGradientStyle(0x3a1a08, 0x3a1a08, 0x3a1a08, 0x3a1a08, 0, 0, 0.45, 0.45); sh.fillRect(50, 730, 620, 70);
+        // reel separators
+        var sep = s.add.graphics().setDepth(8);
+        for (var i = 1; i < 5; i++) { var x = 50 + i * CELL_W; sep.fillStyle(0x6b6b78, 1); sep.fillRect(x - 3, 425, 6, 375); sep.fillStyle(0xe6e6ee, 1); sep.fillRect(x - 1, 425, 2, 375); }
+        // payline markers
+        var pm = s.add.graphics().setDepth(9); pm.fillStyle(0xffd23f, 1);
+        pm.fillTriangle(30, CENTER_Y - 14, 30, CENTER_Y + 14, 50, CENTER_Y); pm.fillTriangle(690, CENTER_Y - 14, 690, CENTER_Y + 14, 670, CENTER_Y);
+        // running lights
+        s.lamps = [];
+        for (var j = 0; j < 10; j++) {
+          var y = 440 + j * 38;
+          s.lamps.push(s.add.image(34, y, 'lamp').setScale(0.45).setDepth(9));
+          s.lamps.push(s.add.image(686, y, 'lamp').setScale(0.45).setDepth(9));
+        }
+      },
+
+      // ---------- reels ----------
+      drawReels: function () {
+        var s = this;
+        var maskShape = s.make.graphics({ add: false }); maskShape.fillRect(50, WIN_Y, 620, WIN_H);
+        var mask = maskShape.createGeometryMask();
+        s.reels = [];
+        REEL_X.forEach(function (x, ri) {
+          var c = s.add.container(x, CENTER_Y).setDepth(7); c.setMask(mask);
+          var r = { c: c, sprites: [], strip: {}, pos: 0, x: x, blur: false };
+          // random start faces, never three sevens on the payline
+          for (var k = -3; k <= 3; k++) r.strip[k] = pick(ri === 2 ? FILL : SYMS.concat(FILL));
+          for (var j = 0; j < 5; j++) { var img = s.add.image(0, 0, 'sym_coin'); c.add(img); r.sprites.push(img); }
+          s.reels.push(r);
+          s.layoutReel(r);
+        });
+        // win overlays (payline + cell frames + flame sprites), created on demand
+        s.winFx = [];
+      },
+      fitSym: function (img, key, blur) {
+        img.setTexture('sym_' + key);
+        var size = key === 'wild' ? 118 : 104;
+        var sc = Math.min(size / img.width, size / img.height);
+        img.setScale(sc, blur ? sc * 1.35 : sc).setAlpha(blur ? 0.7 : 1);
+      },
+      stripAt: function (r, i) { if (r.strip[i] === undefined) r.strip[i] = pick(FILL); return r.strip[i]; },
+      layoutReel: function (r) {
+        var s = this, base = Math.floor(r.pos), frac = r.pos - base;
+        for (var j = 0; j < 5; j++) {
+          var img = r.sprites[j], row = (j - 2) + frac, key = s.stripAt(r, base - (j - 2));
+          img.y = row * CELL_H;
+          if (img.__key !== key || img.__blur !== r.blur) { img.__key = key; img.__blur = r.blur; s.fitSym(img, key, r.blur); }
+        }
+      },
+      spinReel: function (r, idx, result, opts, done) {
+        var s = this, P0 = Math.round(r.pos), N = 26 + idx * 6 + (opts.extra || 0), P = P0 + N;
+        // land the scripted column: strip[P+1] top, strip[P] middle, strip[P-1] bottom
+        r.strip[P + 1] = result[0]; r.strip[P] = result[1]; r.strip[P - 1] = result[2];
+        r.strip[P + 2] = pick(FILL); r.strip[P - 2] = pick(FILL); r.strip[P + 3] = pick(FILL); r.strip[P - 3] = pick(FILL);
+        for (var k = P0 + 3; k < P - 3; k++) r.strip[k] = pick(FILL);
+        r.blur = true;
+        var obj = { v: r.pos }, speed = 24; // cells per second
+        var d1 = ((N - 2) / speed) * 1000 + (opts.slow || 0);
+        s.tweens.add({ targets: obj, v: P - 2, duration: d1, ease: 'Linear',
+          onUpdate: function () { r.pos = obj.v; s.layoutReel(r); },
+          onComplete: function () {
+            r.blur = false;
+            s.tweens.add({ targets: obj, v: P, duration: 420, ease: 'Cubic.easeOut',
+              onUpdate: function () { r.pos = obj.v; s.layoutReel(r); },
+              onComplete: function () {
+                r.pos = P; s.layoutReel(r);
+                sfx('stop', 0.9);
+                s.tweens.add({ targets: r.c, y: CENTER_Y + 12, duration: 90, yoyo: true, ease: 'Quad.easeOut', onComplete: function () { r.c.y = CENTER_Y; } });
+                done();
+              } });
+          } });
+      },
+      cellSprite: function (ri, row) { // row: 0 top, 1 middle, 2 bottom -> the sprite currently at that row
+        var r = this.reels[ri], base = Math.round(r.pos), want = base - (row - 1);
+        for (var j = 0; j < 5; j++) if (base - (j - 2) === want) return r.sprites[j];
+        return r.sprites[2];
+      },
+      cellXY: function (ri, row) { return { x: REEL_X[ri], y: CENTER_Y + (row - 1) * CELL_H }; },
+
+      // ---------- deck + controls ----------
+      drawDeck: function () {
+        var s = this;
+        s.add.image(360, 915, 'deck').setDepth(3);
+        var st = { fontFamily: FONT, fontSize: '24px', color: '#ffffff', stroke: '#3a1200', strokeThickness: 4 };
+        s.add.image(58, 852, 'bet_badge').setScale(0.9).setDepth(4);
+        s.add.text(92, 852, fmt(BET), st).setOrigin(0, 0.5).setDepth(4);
+        s.add.text(522, 852, 'WIN', { fontFamily: FONT, fontSize: '18px', color: '#ffd23f', stroke: '#3a1200', strokeThickness: 3 }).setOrigin(1, 0.5).setDepth(4);
+        s.winText = s.add.text(668, 852, '0', st).setOrigin(1, 0.5).setDepth(4);
+        // AUTO + MAX BET (decorative, as on the real deck)
+        s.add.image(100, 948, 'auto_btn').setScale(0.62).setDepth(4).setAlpha(0.9);
+        s.add.image(100, 948, 'auto_txt').setScale(0.42).setDepth(5);
+        s.add.image(624, 946, 'maxbet').setScale(0.62).setDepth(4);
+        // SPIN
+        s.spinBtn = s.add.image(360, 945, 'spin_btn').setScale(1.18, 1.2).setDepth(4).setInteractive({ useHandCursor: true });
+        s.spinTxt = s.add.image(360, 942, 'spin_txt').setScale(0.9).setDepth(5);
+        s.spinBtn.on('pointerdown', function () { s.onSpin(); });
+        s.spinPulse = s.tweens.add({ targets: [s.spinBtn, s.spinTxt], scaleX: '+=0.06', scaleY: '+=0.06', duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      },
+
+      // ---------- HUD ----------
+      drawHUD: function () {
+        var s = this;
+        s.add.image(178, 52, 'counter').setScale(0.78).setDepth(6);
+        s.add.image(54, 52, 'coin').setScale(0.62).setDepth(7);
+        s.coinText = s.add.text(86, 52, fmt(s.coins), { fontFamily: FONT, fontSize: '27px', color: '#ffffff', stroke: '#2a0a2e', strokeThickness: 4 }).setOrigin(0, 0.5).setDepth(7);
+        s.coinTarget = { x: 54, y: 52 };
+        s.add.image(628, 66, 'logo_baba').setScale(0.36).setDepth(6);
+      },
+      setCoins: function (target, dur) {
+        var s = this, from = s.coins; s.coins = target;
+        s.tweens.addCounter({ from: from, to: target, duration: dur || 900, ease: 'Cubic.easeOut', onUpdate: function (t) { s.coinText.setText(fmt(t.getValue())); } });
+      },
+      setWin: function (target, dur, done) {
+        var s = this, from = s.winShown; s.winShown = target;
+        s.tweens.addCounter({ from: from, to: target, duration: dur || 900, ease: 'Sine.easeOut', onUpdate: function (t) { s.winText.setText(fmt(t.getValue())); }, onComplete: done });
+      },
+      coinBurst: function (x, y, n, done) {
+        var s = this, left = n;
+        for (var i = 0; i < n; i++) {
+          (function (i) {
+            var c = s.add.image(x, y, 'coin').setScale(0.55).setDepth(150);
+            var ang = Math.random() * Math.PI * 2, r = 60 + Math.random() * 120;
+            s.tweens.add({ targets: c, x: x + Math.cos(ang) * r, y: y + Math.sin(ang) * r * 0.7, scale: 0.7, duration: 320, ease: 'Quad.easeOut', onComplete: function () {
+              s.tweens.add({ targets: c, x: s.coinTarget.x, y: s.coinTarget.y, scale: 0.35, duration: 520 + i * 30, delay: 120 + i * 25, ease: 'Cubic.easeIn', onComplete: function () {
+                c.destroy(); if (--left === 0 && done) done();
+              } });
+            } });
+          })(i);
+        }
+      },
+      floatText: function (x, y, str, color, size, depth) {
+        var t = this.add.text(x, y, str, { fontFamily: FONT, fontSize: (size || 46) + 'px', color: color || '#ffe14a', stroke: '#5a1200', strokeThickness: 8 }).setOrigin(0.5).setDepth(depth || 160).setScale(0.4);
+        this.tweens.add({ targets: t, scale: 1, duration: 260, ease: 'Back.easeOut' });
+        this.tweens.add({ targets: t, y: y - 90, alpha: 0, duration: 900, delay: 800, ease: 'Quad.easeIn', onComplete: function () { t.destroy(); } });
+        return t;
+      },
+
+      // ---------- hostess (April) ----------
+      drawHostess: function () {
+        var s = this;
+        s.add.image(600, 1215, 'coin_pile').setScale(0.72).setDepth(4).setAlpha(0.95);
+        s.april = s.add.image(118, 1292, 'april').setOrigin(0.5, 1).setScale(0.86).setDepth(5);
+        s.tweens.add({ targets: s.april, y: 1286, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        var g = s.add.graphics().setDepth(5);
+        g.fillStyle(0xffffff, 0.96); g.fillRoundedRect(236, 1050, 430, 76, 22);
+        g.fillTriangle(236, 1100, 214, 1122, 262, 1112);
+        s.bubbleText = s.add.text(451, 1088, 'Tap SPIN to win!', { fontFamily: FONT, fontSize: '27px', color: '#5b1470' }).setOrigin(0.5).setDepth(6);
+        s.bubble = g;
+      },
+      say: function (str) {
+        var s = this; s.bubbleText.setText(str).setScale(0.6);
+        s.tweens.add({ targets: s.bubbleText, scale: 1, duration: 260, ease: 'Back.easeOut' });
+      },
+
+      // ---------- spin flow ----------
+      onSpin: function () {
+        var s = this;
+        if (s.ended) return;
+        if (s.state !== 'idle') return;
+        var step = SCRIPT[s.spinIndex];
+        if (!step) { s.endGame(); return; }
+        s.state = 'spinning'; s.hideHand(); s.spinIndex++;
+        s.clearWinFx();
+        s.winShown = 0; s.winText.setText('0');
+        sfx('press', 0.9); startSpinLoop();
+        s.setCoins(s.coins - BET, 300);
+        s.spinPulse.pause(); s.spinBtn.setScale(1.18, 1.2).setAlpha(0.55); s.spinTxt.setScale(0.9).setAlpha(0.55);
+        s.tweens.add({ targets: s.spinBtn, scaleX: 1.08, scaleY: 1.1, duration: 80, yoyo: true });
+        s.say(step.kind === 'jackpot' ? 'Go for 5 sevens!' : 'Good luck!');
+        var left = 5, stopped = 0;
+        s.reels.forEach(function (r, i) {
+          var opts = {};
+          if (step.anticipate && i === 4) opts.extra = 44; // ~1.8 s of extra spin on the last reel
+          s.spinReel(r, i, step.grid[i], opts, function () {
+            stopped++;
+            if (step.anticipate && stopped === 4) s.startAnticipation();
+            if (--left === 0) { stopSpinLoop(); s.endAnticipation(); s.onResult(step); }
+          });
+        });
+      },
+      startAnticipation: function () {
+        var s = this;
+        sfx('tension', 1);
+        var g = s.add.graphics().setDepth(10);
+        g.lineStyle(8, 0xffe14a, 1); g.strokeRoundedRect(REEL_X[4] - 58, WIN_Y + 4, 116, WIN_H - 8, 10);
+        g.lineStyle(20, 0xffe14a, 0.25); g.strokeRoundedRect(REEL_X[4] - 58, WIN_Y + 4, 116, WIN_H - 8, 10);
+        s.antic = g;
+        s.anticTween = s.tweens.add({ targets: g, alpha: 0.35, duration: 160, yoyo: true, repeat: -1 });
+        s.say('One more seven!');
+        // flash the four landed sevens
+        for (var ri = 0; ri < 4; ri++) for (var row = 0; row < 3; row++) {
+          var key = SCRIPT[1].grid[ri][row];
+          if (key === 'seven') { var im = s.cellSprite(ri, row); s.tweens.add({ targets: im, scale: im.scale * 1.15, duration: 200, yoyo: true, repeat: 5 }); }
+        }
+      },
+      endAnticipation: function () {
+        if (this.anticTween) this.anticTween.stop();
+        if (this.antic) { this.antic.destroy(); this.antic = null; }
+      },
+      clearWinFx: function () {
+        this.winFx.forEach(function (o) { o.destroy(); }); this.winFx = [];
+        this.reels.forEach(function (r) { r.sprites.forEach(function (im) { im.setVisible(true); }); });
+      },
+      flameAt: function (ri, row) {
+        var s = this, p = s.cellXY(ri, row), under = s.cellSprite(ri, row);
+        under.setVisible(false);
+        var sp = s.add.sprite(p.x, p.y, 'seven_anim', 0).setDepth(8).setScale(104 / 118);
+        sp.play('flame'); s.winFx.push(sp);
+        s.tweens.add({ targets: sp, scale: 1.05, duration: 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        return sp;
+      },
+      cellFrame: function (ri, row) {
+        var s = this, p = s.cellXY(ri, row), g = s.add.graphics().setDepth(9);
+        g.lineStyle(6, 0xffd23f, 1); g.strokeRoundedRect(p.x - 58, p.y - 58, 116, 116, 12);
+        g.lineStyle(14, 0xffd23f, 0.25); g.strokeRoundedRect(p.x - 58, p.y - 58, 116, 116, 12);
+        s.winFx.push(g);
+        s.tweens.add({ targets: g, alpha: 0.4, duration: 260, yoyo: true, repeat: -1 });
+        return g;
+      },
+
+      onResult: function (step) {
+        var s = this;
+        if (step.kind === 'line') s.lineWin(step); else s.jackpotWin(step);
+      },
+
+      // ---------- spin 1: payline win ----------
+      lineWin: function (step) {
+        var s = this;
+        s.state = 'win';
+        var line = s.add.graphics().setDepth(9);
+        line.lineStyle(10, 0xffd23f, 0.35); line.lineBetween(50, CENTER_Y, 50 + 3 * CELL_W, CENTER_Y);
+        line.lineStyle(4, 0xfff3a8, 1); line.lineBetween(50, CENTER_Y, 50 + 3 * CELL_W, CENTER_Y);
+        s.winFx.push(line);
+        for (var ri = 0; ri < 3; ri++) {
+          s.cellFrame(ri, 1);
+          if (step.grid[ri][1] === 'seven') s.flameAt(ri, 1);
+          else { var im = s.cellSprite(ri, 1); s.tweens.add({ targets: im, scale: im.scale * 1.15, duration: 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }); }
+        }
+        sfx('win', 1); sfx('coinwin', 0.9);
+        var wi = s.add.image(360, CENTER_Y, 'win_icon').setDepth(120).setScale(0.2);
+        s.tweens.add({ targets: wi, scale: 1.25, duration: 320, ease: 'Back.easeOut' });
+        s.tweens.add({ targets: wi, alpha: 0, y: CENTER_Y - 60, duration: 500, delay: 1300, onComplete: function () { wi.destroy(); } });
+        s.floatText(360, CENTER_Y + 110, '+' + fmt(step.win), '#ffe14a', 50, 121);
+        s.setWin(step.win, 900);
+        s.time.delayedCall(700, function () {
+          s.coinBurst(360, CENTER_Y, 16, function () { sfx('collect', 0.8); });
+          s.setCoins(s.coins + step.win, 1100);
+        });
+        s.say('Nice! Spin again!');
+        s.time.delayedCall(2100, function () { s.readyToSpin(); });
+      },
+      readyToSpin: function () {
+        var s = this; s.state = 'idle';
+        s.spinBtn.setAlpha(1); s.spinTxt.setAlpha(1); s.spinPulse.resume();
+        s.showHand();
+      },
+
+      // ---------- spin 2: ANY 5 sevens jackpot -> big win ----------
+      jackpotWin: function (step) {
+        var s = this;
+        s.state = 'bigwin';
+        s.say('BABASTIC!');
+        var cells = [];
+        for (var ri = 0; ri < 5; ri++) for (var row = 0; row < 3; row++) if (step.grid[ri][row] === 'seven') cells.push([ri, row]);
+        cells.forEach(function (c) { s.cellFrame(c[0], c[1]); s.flameAt(c[0], c[1]); });
+        sfx('bigwin', 1);
+        // light up the ANY 5 row on the jackpot panel
+        var row = s.jpRows[5]; row.hl.setVisible(true);
+        s.tweens.add({ targets: row.hl, alpha: 0.2, duration: 180, yoyo: true, repeat: 9 });
+        s.tweens.add({ targets: row.text, scale: 1.25, duration: 180, yoyo: true, repeat: 9 });
+        var st = s.add.image(443, 364, 'star').setDepth(30).setScale(0.4).setAlpha(0);
+        s.tweens.add({ targets: st, alpha: 1, scale: 1.6, angle: 90, duration: 700, yoyo: true, onComplete: function () { st.destroy(); } });
+        var five = s.floatText(360, 560, '5 SEVENS!', '#ffffff', 58, 121);
+        s.time.delayedCall(1200, function () { s.showBigWin(step.win); });
+      },
+      buildBigWin: function () {
+        var s = this, c = s.add.container(0, 0).setDepth(100).setVisible(false);
+        var dark = s.add.graphics(); dark.fillStyle(0x0a0010, 0.72); dark.fillRect(0, 0, W, H); c.add(dark);
+        var rays = s.add.image(360, 520, 'rays').setScale(4.2).setTint(0xffc03a).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.8); c.add(rays);
+        var rays2 = s.add.image(360, 520, 'rays').setScale(3.2).setTint(0xff5ad2).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.6); c.add(rays2);
+        var cl = s.add.image(120, 560, 'coins_left').setScale(0.9).setAlpha(0); c.add(cl);
+        var cr = s.add.image(600, 560, 'coins_right').setScale(0.9).setAlpha(0); c.add(cr);
+        var jp = s.add.image(360, 330, 'jackpot_icon').setScale(0.2).setAlpha(0); c.add(jp);
+        var title = s.add.image(360, 500, 'bigwin').setScale(0.2).setAlpha(0); c.add(title);
+        var amount = s.add.text(360, 640, '0', { fontFamily: FONT, fontSize: '84px', color: '#ffe14a', stroke: '#6b1a00', strokeThickness: 12 }).setOrigin(0.5).setScale(0.6); c.add(amount);
+        var hint = s.add.text(360, 760, 'COINS', { fontFamily: FONT, fontSize: '34px', color: '#ffffff', stroke: '#3a0a40', strokeThickness: 8 }).setOrigin(0.5); c.add(hint);
+        var zone = s.add.zone(360, 640, W, H).setInteractive(); c.add(zone);
+        zone.on('pointerdown', function () { s.skipBigWin(); });
+        s.big = { c: c, rays: rays, rays2: rays2, cl: cl, cr: cr, jp: jp, title: title, amount: amount, hint: hint, counter: null, done: false };
+        s.tweens.add({ targets: rays, angle: 360, duration: 12000, repeat: -1 });
+        s.tweens.add({ targets: rays2, angle: -360, duration: 9000, repeat: -1 });
+        s.emitter = s.add.particles(0, 0, 'coin', {
+          x: { min: 40, max: 680 }, y: -60, lifespan: 2600, speedY: { min: 260, max: 520 }, speedX: { min: -40, max: 40 },
+          scale: { min: 0.35, max: 0.8 }, rotate: { min: 0, max: 360 }, angle: 90, gravityY: 300, quantity: 2, frequency: 70, emitting: false
+        }).setDepth(101);
+      },
+      showBigWin: function (total) {
+        var s = this, b = s.big;
+        b.c.setVisible(true).setAlpha(0); b.done = false;
+        s.tweens.add({ targets: b.c, alpha: 1, duration: 300 });
+        sfx('jackpot', 1); sfx('popup', 0.9);
+        s.emitter.start();
+        s.tweens.add({ targets: b.jp, alpha: 1, scale: 1.35, duration: 420, ease: 'Back.easeOut' });
+        s.tweens.add({ targets: b.jp, scale: 1.25, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 420 });
+        s.tweens.add({ targets: b.cl, alpha: 1, x: 130, duration: 500, ease: 'Quad.easeOut', delay: 100 });
+        s.tweens.add({ targets: b.cr, alpha: 1, x: 590, duration: 500, ease: 'Quad.easeOut', delay: 100 });
+        s.tweens.add({ targets: b.cl, y: 540, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        s.tweens.add({ targets: b.cr, y: 580, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        var stage = 0;
+        function setTitle(key, snd) {
+          b.title.setTexture(key).setScale(0.2).setAlpha(0);
+          s.tweens.add({ targets: b.title, alpha: 1, scale: key === 'babastic' ? 1.05 : 1.15, duration: 380, ease: 'Back.easeOut' });
+          if (snd) sfx(snd, 1);
+        }
+        setTitle('bigwin', null);
+        b.counter = s.tweens.addCounter({ from: 0, to: total, duration: 3600, ease: 'Sine.easeOut',
+          onUpdate: function (t) {
+            var v = t.getValue(); b.amount.setText(fmt(v));
+            var p = t.progress;
+            if (stage === 0 && p > 0.4) { stage = 1; setTitle('megawin', 'bigwin2'); }
+            if (stage === 1 && p > 0.75) { stage = 2; setTitle('babastic', 'babastic'); }
+          },
+          onComplete: function () { s.finishBigWin(total); } });
+        s.tweens.add({ targets: b.amount, scale: 1, duration: 3600, ease: 'Sine.easeOut' });
+      },
+      skipBigWin: function () {
+        var b = this.big;
+        if (b.counter && b.counter.isPlaying()) b.counter.complete();
+      },
+      finishBigWin: function (total) {
+        var s = this, b = s.big;
+        if (b.done) return; b.done = true;
+        sfx('winner', 1); sfx('fanfare', 0.7);
+        s.tweens.add({ targets: b.amount, scale: 1.18, duration: 200, yoyo: true, repeat: 2 });
+        s.time.delayedCall(1500, function () {
+          sfx('whoosh', 0.9);
+          s.emitter.stop();
+          s.coinBurst(360, 640, 22, function () { sfx('collect', 0.9); });
+          s.setCoins(s.coins + total, 1200);
+          s.setWin(total, 800);
+          s.tweens.add({ targets: b.c, alpha: 0, duration: 500, delay: 500, onComplete: function () { b.c.setVisible(false); } });
+          s.time.delayedCall(2200, function () { s.endGame(); });
+        });
+      },
+
+      // ---------- end ----------
+      endGame: function () {
+        var s = this; if (s.ended) return;
+        s.ended = true; s.hideHand(); s.state = 'end';
+        stopSpinLoop();
+        document.getElementById('endTitle').textContent = 'YOU WON ' + fmt(s.coins - START_COINS + 2 * BET) + '!';
+        var ec = document.getElementById('endcard');
+        ec.className = 'show';
+        window.gameEnd && window.gameEnd();
+      }
+    });
+
+    var IMAGES = {}, game = null;
+    function boot() {
+      game = new Phaser.Game({
+        type: Phaser.AUTO, parent: 'gameContainer', backgroundColor: '#2a0a2e',
+        scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: W, height: H },
+        scene: [Main], render: { antialias: true, pixelArt: false }
+      });
+    }
+    (function decodeAll() {
+      var keys = Object.keys(ASSETS), left = keys.length;
+      keys.forEach(function (k) {
+        var im = new Image();
+        im.onload = im.onerror = function () { IMAGES[k] = im; if (--left === 0) boot(); };
+        im.src = ASSETS[k];
+      });
+    })();
+
+    function goStore(e) { if (e) { e.preventDefault(); e.stopPropagation(); } window.open(clickTag, '_blank'); }
+    var ec = document.getElementById('endcard');
+    ec.addEventListener('click', goStore);
+    ec.addEventListener('touchend', goStore);
+    document.getElementById('ctaBtn').addEventListener('click', goStore);
+    window.addEventListener('resize', function () { if (game) game.scale.refresh(); });
+    // TODO: hook analytics here
+  })();
+  </script>
+</body>
+</html>
